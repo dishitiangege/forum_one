@@ -1,37 +1,64 @@
 <?php
-
-namespace Widget\Contents\Post;
-
-use Typecho\Config;
-use Typecho\Db;
-use Typecho\Router;
-use Typecho\Widget;
-use Widget\Base;
-
-if (!defined('__TYPECHO_ROOT_DIR__')) {
-    exit;
-}
+if (!defined('__TYPECHO_ROOT_DIR__')) exit;
+/**
+ * 按日期归档列表组件
+ *
+ * @category typecho
+ * @package Widget
+ * @copyright Copyright (c) 2008 Typecho team (http://www.typecho.org)
+ * @license GNU General Public License 2.0
+ * @version $Id$
+ */
 
 /**
  * 按日期归档列表组件
  *
+ * @fixme 交给缓存
  * @author qining
  * @category typecho
  * @package Widget
  */
-class Date extends Base
+class Widget_Contents_Post_Date extends Typecho_Widget
 {
     /**
-     * @param Config $parameter
+     * 全局选项
+     *
+     * @access protected
+     * @var Widget_Options
      */
-    protected function initParameter(Config $parameter)
+    protected $options;
+
+    /**
+     * 数据库对象
+     *
+     * @access protected
+     * @var Typecho_Db
+     */
+    protected $db;
+
+    /**
+     * 构造函数,初始化组件
+     *
+     * @access public
+     * @param mixed $request request对象
+     * @param mixed $response response对象
+     * @param mixed $params 参数列表
+     */
+    public function __construct($request, $response, $params = NULL)
     {
-        $parameter->setDefault('format=Y-m&type=month&limit=0');
+        parent::__construct($request, $response, $params);
+
+        /** 初始化数据库 */
+        $this->db = Typecho_Db::get();
+
+        /** 初始化常用组件 */
+        $this->options = $this->widget('Widget_Options');
     }
 
     /**
      * 初始化函数
      *
+     * @access public
      * @return void
      */
     public function execute()
@@ -40,13 +67,13 @@ class Date extends Base
         $this->parameter->setDefault('format=Y-m&type=month&limit=0');
 
         $resource = $this->db->query($this->db->select('created')->from('table.contents')
-            ->where('type = ?', 'post')
-            ->where('table.contents.status = ?', 'publish')
-            ->where('table.contents.created < ?', $this->options->time)
-            ->order('table.contents.created', Db::SORT_DESC));
+        ->where('type = ?', 'post')
+        ->where('table.contents.status = ?', 'publish')
+        ->where('table.contents.created < ?', $this->options->time)
+        ->order('table.contents.created', Typecho_Db::SORT_DESC));
 
         $offset = $this->options->timezone - $this->options->serverTimezone;
-        $result = [];
+        $result = array();
         while ($post = $this->db->fetchRow($resource)) {
             $timeStamp = $post['created'] + $offset;
             $date = date($this->parameter->format, $timeStamp);
@@ -67,11 +94,7 @@ class Date extends Base
         }
 
         foreach ($result as $row) {
-            $row['permalink'] = Router::url(
-                'archive_' . $this->parameter->type,
-                $row,
-                $this->options->index
-            );
+            $row['permalink'] = Typecho_Router::url('archive_' . $this->parameter->type, $row, $this->widget('Widget_Options')->index);
             $this->push($row);
         }
     }

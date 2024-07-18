@@ -12,15 +12,15 @@ if (!defined('__TYPECHO_ROOT_DIR__') && !@include_once __DIR__ . '/../config.inc
 }
 
 /** 初始化组件 */
-\Widget\Init::alloc();
+Typecho_Widget::widget('Widget_Init');
 
 /** 注册一个初始化插件 */
-\Typecho\Plugin::factory('admin/common.php')->begin();
+Typecho_Plugin::factory('admin/common.php')->begin();
 
-\Widget\Options::alloc()->to($options);
-\Widget\User::alloc()->to($user);
-\Widget\Security::alloc()->to($security);
-\Widget\Menu::alloc()->to($menu);
+Typecho_Widget::widget('Widget_Options')->to($options);
+Typecho_Widget::widget('Widget_User')->to($user);
+Typecho_Widget::widget('Widget_Security')->to($security);
+Typecho_Widget::widget('Widget_Menu')->to($menu);
 
 /** 初始化上下文 */
 $request = $options->request;
@@ -28,27 +28,32 @@ $response = $options->response;
 
 /** 检测是否是第一次登录 */
 $currentMenu = $menu->getCurrentMenu();
+list($prefixVersion, $suffixVersion) = explode('/', $options->version);
+$params = parse_url($currentMenu[2]);
+$adminFile = basename($params['path']);
 
-if (!empty($currentMenu)) {
-    $params = parse_url($currentMenu[2]);
-    $adminFile = basename($params['path']);
+if (!$user->logged && !Typecho_Cookie::get('__typecho_first_run') && !empty($currentMenu)) {
+    
+    if ('welcome.php' != $adminFile) {
+        $response->redirect(Typecho_Common::url('welcome.php', $options->adminUrl));
+    } else {
+        Typecho_Cookie::set('__typecho_first_run', 1);
+    }
+    
+} else {
 
-    if (!$user->logged && !\Typecho\Cookie::get('__typecho_first_run')) {
-        if ('welcome.php' != $adminFile) {
-            $response->redirect(\Typecho\Common::url('welcome.php', $options->adminUrl));
-        } else {
-            \Typecho\Cookie::set('__typecho_first_run', 1);
-        }
-    } elseif ($user->pass('administrator', true)) {
-        /** 检测版本是否升级 */
-        $mustUpgrade = version_compare(\Typecho\Common::VERSION, $options->version, '>');
+    /** 检测版本是否升级 */
+    if ($user->pass('administrator', true) && !empty($currentMenu)) {
+        $mustUpgrade = (!defined('Typecho_Common::VERSION') || version_compare(str_replace('/', '.', Typecho_Common::VERSION),
+        str_replace('/', '.', $options->version), '>'));
 
         if ($mustUpgrade && 'upgrade.php' != $adminFile && 'backup.php' != $adminFile) {
-            $response->redirect(\Typecho\Common::url('upgrade.php', $options->adminUrl));
-        } elseif (!$mustUpgrade && 'upgrade.php' == $adminFile) {
+            $response->redirect(Typecho_Common::url('upgrade.php', $options->adminUrl));
+        } else if (!$mustUpgrade && 'upgrade.php' == $adminFile) {
             $response->redirect($options->adminUrl);
-        } elseif (!$mustUpgrade && 'welcome.php' == $adminFile && $user->logged) {
+        } else if (!$mustUpgrade && 'welcome.php' == $adminFile && $user->logged) {
             $response->redirect($options->adminUrl);
         }
     }
+
 }

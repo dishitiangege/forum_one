@@ -1,12 +1,14 @@
 <?php
-
-namespace Widget;
-
-use Widget\Base\Users;
-
-if (!defined('__TYPECHO_ROOT_DIR__')) {
-    exit;
-}
+if (!defined('__TYPECHO_ROOT_DIR__')) exit;
+/**
+ * 登出动作
+ *
+ * @category typecho
+ * @package Widget
+ * @copyright Copyright (c) 2008 Typecho team (http://www.typecho.org)
+ * @license GNU General Public License 2.0
+ * @version $Id$
+ */
 
 /**
  * 登出组件
@@ -16,7 +18,7 @@ if (!defined('__TYPECHO_ROOT_DIR__')) {
  * @copyright Copyright (c) 2008 Typecho team (http://www.typecho.org)
  * @license GNU General Public License 2.0
  */
-class Logout extends Users implements ActionInterface
+class Widget_Logout extends Widget_Abstract_Users implements Widget_Interface_Do
 {
     /**
      * 初始化函数
@@ -26,12 +28,9 @@ class Logout extends Users implements ActionInterface
      */
     public function action()
     {
-        // protect
-        $this->security->protect();
-
         $this->user->logout();
-        self::pluginHandle()->logout();
+        $this->pluginHandle()->logout();
+        $this->response->goBack(NULL, $this->options->index);
         @session_destroy();
-        $this->response->goBack(null, $this->options->index);
     }
 }

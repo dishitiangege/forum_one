@@ -1,8 +1,13 @@
 <?php
-
-namespace Typecho;
-
-use Typecho\Widget\Terminal;
+/**
+ * API方法,Typecho命名空间
+ *
+ * @category typecho
+ * @package Response
+ * @copyright Copyright (c) 2008 Typecho team (http://www.typecho.org)
+ * @license GNU General Public License 2.0
+ * @version $Id$
+ */
 
 /**
  * Typecho公用方法
@@ -12,7 +17,7 @@ use Typecho\Widget\Terminal;
  * @copyright Copyright (c) 2008 Typecho team (http://www.typecho.org)
  * @license GNU General Public License 2.0
  */
-class Response
+class Typecho_Response
 {
     /**
      * http code
@@ -20,7 +25,7 @@ class Response
      * @access private
      * @var array
      */
-    private const HTTP_CODE = [
+    private static $_httpCode = array(
         100 => 'Continue',
         101 => 'Switching Protocols',
         200 => 'OK',
@@ -61,177 +66,150 @@ class Response
         503 => 'Service Unavailable',
         504 => 'Gateway Timeout',
         505 => 'HTTP Version Not Supported'
-    ];
-
-    //默认的字符编码
-    /**
-     * 单例句柄
-     *
-     * @access private
-     * @var Response
-     */
-    private static $instance;
+    );
 
     /**
      * 字符编码
      *
-     * @var string
+     * @var mixed
+     * @access private
      */
-    private $charset = 'UTF-8';
+    private $_charset;
+
+    //默认的字符编码
+    const CHARSET = 'UTF-8';
 
     /**
-     * @var string
+     * 单例句柄
+     *
+     * @access private
+     * @var Typecho_Response
      */
-    private $contentType = 'text/html';
+    private static $_instance = null;
 
     /**
-     * @var callable[]
-     */
-    private $responders = [];
-
-    /**
+     * 结束前回调函数
+     *
      * @var array
      */
-    private $cookies = [];
-
-    /**
-     * @var array
-     */
-    private $headers = [];
-
-    /**
-     * @var int
-     */
-    private $status = 200;
-
-    /**
-     * @var bool
-     */
-    private $enableAutoSendHeaders = true;
-
-    /**
-     * @var bool
-     */
-    private $sandbox = false;
-
-    /**
-     * init responder
-     */
-    public function __construct()
-    {
-        $this->clean();
-    }
+    private static $_callbacks = array();
 
     /**
      * 获取单例句柄
      *
-     * @return Response
+     * @access public
+     * @return Typecho_Response
      */
-    public static function getInstance(): Response
+    public static function getInstance()
     {
-        if (!isset(self::$instance)) {
-            self::$instance = new self();
+        if (null === self::$_instance) {
+            self::$_instance = new Typecho_Response();
         }
 
-        return self::$instance;
+        return self::$_instance;
     }
 
     /**
-     * @return $this
+     * 解析ajax回执的内部函数
+     *
+     * @access private
+     * @param mixed $message 格式化数据
+     * @return string
      */
-    public function beginSandbox(): Response
+    private function _parseXml($message)
     {
-        $this->sandbox = true;
-        return $this;
+        /** 对于数组型则继续递归 */
+        if (is_array($message)) {
+            $result = '';
+
+            foreach ($message as $key => $val) {
+                $tagName = is_int($key) ? 'item' : $key;
+                $result .= '<' . $tagName . '>' . $this->_parseXml($val) . '</' . $tagName . '>';
+            }
+
+            return $result;
+        } else {
+            return preg_match("/^[^<>]+$/is", $message) ? $message : '<![CDATA[' . $message . ']]>';
+        }
     }
 
     /**
-     * @return $this
+     * 结束前的统一回调函数
      */
-    public function endSandbox(): Response
+    public static function callback()
     {
-        $this->sandbox = false;
-        return $this;
-    }
+        static $called;
 
-    /**
-     * @param bool $enable
-     */
-    public function enableAutoSendHeaders(bool $enable = true)
-    {
-        $this->enableAutoSendHeaders = $enable;
-    }
-
-    /**
-     * clean all
-     */
-    public function clean()
-    {
-        $this->headers = [];
-        $this->cookies = [];
-        $this->status = 200;
-        $this->responders = [];
-        $this->setContentType('text/html');
-    }
-
-    /**
-     * send all headers
-     */
-    public function sendHeaders()
-    {
-        if ($this->sandbox) {
+        if ($called) {
             return;
         }
 
-        $sentHeaders = [];
-        foreach (headers_list() as $header) {
-            [$key] = explode(':', $header, 2);
-            $sentHeaders[] = strtolower(trim($key));
-        }
-
-        header('HTTP/1.1 ' . $this->status . ' ' . self::HTTP_CODE[$this->status], true, $this->status);
-
-        // set header
-        foreach ($this->headers as $name => $value) {
-            if (!in_array(strtolower($name), $sentHeaders)) {
-                header($name . ': ' . $value, true);
-            }
-        }
-
-        // set cookie
-        foreach ($this->cookies as $cookie) {
-            [$key, $value, $timeout, $path, $domain, $secure, $httponly] = $cookie;
-
-            if ($timeout > 0) {
-                $now = time();
-                $timeout += $timeout > $now - 86400 ? 0 : $now;
-            } elseif ($timeout < 0) {
-                $timeout = 1;
-            }
-
-            setrawcookie($key, rawurlencode($value), $timeout, $path, $domain, $secure, $httponly);
+        $called = true;
+        foreach (self::$_callbacks as $callback) {
+            call_user_func($callback);
         }
     }
 
     /**
-     * respond data
-     * @throws Terminal
+     * 新增回调
+     *
+     * @param $callback
      */
-    public function respond()
+    public static function addCallback($callback)
     {
-        if ($this->sandbox) {
-            throw new Terminal();
+        self::$_callbacks[] = $callback;
+    }
+
+    /**
+     * 设置默认回执编码
+     *
+     * @access public
+     * @param string $charset 字符集
+     * @return void
+     */
+    public function setCharset($charset = null)
+    {
+        $this->_charset = empty($charset) ? self::CHARSET : $charset;
+    }
+
+    /**
+     * 获取字符集
+     *
+     * @access public
+     * @return string
+     */
+    public function getCharset()
+    {
+        if (empty($this->_charset)) {
+            $this->setCharset();
         }
 
-        if ($this->enableAutoSendHeaders) {
-            $this->sendHeaders();
-        }
+        return $this->_charset;
+    }
 
-        foreach ($this->responders as $responder) {
-            call_user_func($responder, $this);
-        }
+    /**
+     * 在http头部请求中声明类型和字符集
+     *
+     * @access public
+     * @param string $contentType 文档类型
+     * @return void
+     */
+    public function setContentType($contentType = 'text/html')
+    {
+        header('Content-Type: ' . $contentType . '; charset=' . $this->getCharset(), true);
+    }
 
-        exit;
+    /**
+     * 设置http头
+     *
+     * @access public
+     * @param string $name 名称
+     * @param string $value 对应值
+     * @return void
+     */
+    public function setHeader($name, $value)
+    {
+        header($name . ': ' . $value, true);
     }
 
     /**
@@ -239,116 +217,124 @@ class Response
      *
      * @access public
      * @param integer $code http代码
-     * @return $this
+     * @return void
      */
-    public function setStatus(int $code): Response
+    public static function setStatus($code)
     {
-        if (!$this->sandbox) {
-            $this->status = $code;
+        if (isset(self::$_httpCode[$code])) {
+            header((isset($_SERVER['SERVER_PROTOCOL']) ? $_SERVER['SERVER_PROTOCOL'] : 'HTTP/1.1') . ' ' . $code . ' ' . self::$_httpCode[$code], true, $code);
         }
-
-        return $this;
     }
 
     /**
-     * 设置http头
+     * 抛出ajax的回执信息
      *
-     * @param string $name 名称
-     * @param string $value 对应值
-     * @return $this
+     * @access public
+     * @param string $message 消息体
+     * @return void
      */
-    public function setHeader(string $name, string $value): Response
+    public function throwXml($message)
     {
-        if (!$this->sandbox) {
-            $name = str_replace(' ', '-', ucwords(str_replace('-', ' ', $name)));
-            $this->headers[$name] = $value;
-        }
+        /** 设置http头信息 */
+        $this->setContentType('text/xml');
 
-        return $this;
+        /** 构建消息体 */
+        echo '<?xml version="1.0" encoding="' . $this->getCharset() . '"?>',
+        '<response>',
+        $this->_parseXml($message),
+        '</response>';
+
+        /** 终止后续输出 */
+        self::callback();
+        exit;
     }
 
     /**
-     * 设置指定的COOKIE值
+     * 抛出json回执信息
      *
-     * @param string $key 指定的参数
-     * @param mixed $value 设置的值
-     * @param integer $timeout 过期时间,默认为0,表示随会话时间结束
-     * @param string $path 路径信息
-     * @param string|null $domain 域名信息
-     * @param bool $secure 是否仅可通过安全的 HTTPS 连接传给客户端
-     * @param bool $httponly 是否仅可通过 HTTP 协议访问
-     * @return $this
+     * @access public
+     * @param mixed $message 消息体
+     * @return void
      */
-    public function setCookie(
-        string $key,
-        $value,
-        int $timeout = 0,
-        string $path = '/',
-        string $domain = '',
-        bool $secure = false,
-        bool $httponly = false
-    ): Response {
-        if (!$this->sandbox) {
-            $this->cookies[] = [$key, $value, $timeout, $path, $domain, $secure, $httponly];
-        }
+    public function throwJson($message)
+    {
+        /** 设置http头信息 */
+        $this->setContentType('application/json');
 
-        return $this;
+        echo Json::encode($message);
+
+        /** 终止后续输出 */
+        self::callback();
+        exit;
     }
 
     /**
-     * 在http头部请求中声明类型和字符集
+     * 重定向函数
      *
-     * @param string $contentType 文档类型
-     * @return $this
+     * @access public
+     * @param string $location 重定向路径
+     * @param boolean $isPermanently 是否为永久重定向
+     * @return void
      */
-    public function setContentType(string $contentType = 'text/html'): Response
+    public function redirect($location, $isPermanently = false)
     {
-        if (!$this->sandbox) {
-            $this->contentType = $contentType;
-            $this->setHeader('Content-Type', $this->contentType . '; charset=' . $this->charset);
-        }
+        /** Typecho_Common */
+        $location = Typecho_Common::safeUrl($location);
 
-        return $this;
+        if ($isPermanently) {
+            self::callback();
+            header('Location: ' . $location, false, 301);
+            exit;
+        } else {
+            self::callback();
+            header('Location: ' . $location, false, 302);
+            exit;
+        }
     }
 
     /**
-     * 获取字符集
+     * 返回来路
      *
-     * @return string
+     * @access public
+     * @param string $suffix 附加地址
+     * @param string $default 默认来路
      */
-    public function getCharset(): string
+    public function goBack($suffix = NULL, $default = NULL)
     {
-        return $this->charset;
-    }
+        //获取来源
+        $referer = isset($_SERVER['HTTP_REFERER']) ? $_SERVER['HTTP_REFERER'] : '';
 
-    /**
-     * 设置默认回执编码
-     *
-     * @param string $charset 字符集
-     * @return $this
-     */
-    public function setCharset(string $charset): Response
-    {
-        if (!$this->sandbox) {
-            $this->charset = $charset;
-            $this->setHeader('Content-Type', $this->contentType . '; charset=' . $this->charset);
+        //判断来源
+        if (!empty($referer)) {
+            // ~ fix Issue 38
+            if (!empty($suffix)) {
+                $parts = parse_url($referer);
+                $myParts = parse_url($suffix);
+
+                if (isset($myParts['fragment'])) {
+                    $parts['fragment'] = $myParts['fragment'];
+                }
+
+                if (isset($myParts['query'])) {
+                    $args = array();
+                    if (isset($parts['query'])) {
+                        parse_str($parts['query'], $args);
+                    }
+
+                    parse_str($myParts['query'], $currentArgs);
+                    $args = array_merge($args, $currentArgs);
+                    $parts['query'] = http_build_query($args);
+                }
+
+                $referer = Typecho_Common::buildUrl($parts);
+            }
+
+            $this->redirect($referer, false);
+        } else if (!empty($default)) {
+            $this->redirect($default);
         }
 
-        return $this;
-    }
-
-    /**
-     * add responder
-     *
-     * @param callable $responder
-     * @return $this
-     */
-    public function addResponder(callable $responder): Response
-    {
-        if (!$this->sandbox) {
-            $this->responders[] = $responder;
-        }
-
-        return $this;
+        self::callback();
+        exit;
     }
 }

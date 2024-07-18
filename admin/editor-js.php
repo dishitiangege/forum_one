@@ -1,9 +1,7 @@
 <?php if(!defined('__TYPECHO_ADMIN__')) exit; ?>
 <?php $content = !empty($post) ? $post : $page; if ($options->markdown): ?>
-<script src="<?php $options->adminStaticUrl('js', 'hyperdown.js'); ?>"></script>
-<script src="<?php $options->adminStaticUrl('js', 'pagedown.js'); ?>"></script>
-<script src="<?php $options->adminStaticUrl('js', 'paste.js'); ?>"></script>
-<script src="<?php $options->adminStaticUrl('js', 'purify.js'); ?>"></script>
+<script src="<?php $options->adminStaticUrl('js', 'hyperdown.js?v=' . $suffixVersion); ?>"></script>
+<script src="<?php $options->adminStaticUrl('js', 'pagedown.js?v=' . $suffixVersion); ?>"></script>
 <script>
 $(document).ready(function () {
     var textarea = $('#text'),
@@ -86,11 +84,11 @@ $(document).ready(function () {
                 src = src.substring(0, src.length - 1);
             }
 
-            return '<div class="embed"><strong>'
+            return '<div style="border: 1px solid #ccc; height: 40px; overflow: hidden; line-height: 40px; text-align: center; font-size: 12px; color: #777"><strong>'
                 + tag + '</strong> : ' + $.trim(src) + '</div>';
         });
 
-        return DOMPurify.sanitize(html, {USE_PROFILES: {html: true}});
+        return html;
     });
 
     editor.hooks.chain('onPreviewRefresh', function () {
@@ -99,7 +97,7 @@ $(document).ready(function () {
         if (count == 0) {
             reloadScroll(true);
         } else {
-            images.bind('load error', function () {
+            images.load(function () {
                 count --;
 
                 if (count == 0) {
@@ -109,7 +107,7 @@ $(document).ready(function () {
         }
     });
 
-    <?php \Typecho\Plugin::factory('admin/editor-js.php')->markdownEditor($content); ?>
+    <?php Typecho_Plugin::factory('admin/editor-js.php')->markdownEditor($content); ?>
 
     var th = textarea.height(), ph = preview.height(),
         uploadBtn = $('<button type="button" id="btn-fullscreen-upload" class="btn btn-link">'
@@ -204,17 +202,6 @@ $(document).ready(function () {
             $("#wmd-preview").outerHeight($("#wmd-editarea").innerHeight());
 
             return false;
-        });
-
-        // 剪贴板复制图片
-        textarea.pastableTextarea().on('pasteImage', function (e, data) {
-            var name = data.name ? data.name.replace(/[\(\)\[\]\*#!]/g, '') : (new Date()).toISOString().replace(/\..+$/, '');
-            if (!name.match(/\.[a-z0-9]{2,}$/i)) {
-                var ext = data.blob.type.split('/').pop();
-                name += '.' + ext;
-            }
-
-            Typecho.uploadFile(new File([data.blob], name), name);
         });
     }
 

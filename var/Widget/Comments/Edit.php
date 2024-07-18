@@ -1,15 +1,12 @@
 <?php
-
-namespace Widget\Comments;
-
-use Typecho\Db\Exception;
-use Widget\Base\Comments;
-use Widget\ActionInterface;
-use Widget\Notice;
-
-if (!defined('__TYPECHO_ROOT_DIR__')) {
-    exit;
-}
+if (!defined('__TYPECHO_ROOT_DIR__')) exit;
+/**
+ * Typecho Blog Platform
+ *
+ * @copyright  Copyright (c) 2008 Typecho team (http://www.typecho.org)
+ * @license    GNU General Public License 2.0
+ * @version    $Id$
+ */
 
 /**
  * 评论编辑组件
@@ -20,49 +17,24 @@ if (!defined('__TYPECHO_ROOT_DIR__')) {
  * @copyright Copyright (c) 2008 Typecho team (http://www.typecho.org)
  * @license GNU General Public License 2.0
  */
-class Edit extends Comments implements ActionInterface
+class Widget_Comments_Edit extends Widget_Abstract_Comments implements Widget_Interface_Do
 {
-    /**
-     * 标记为待审核
-     */
-    public function waitingComment()
-    {
-        $comments = $this->request->filter('int')->getArray('coid');
-        $updateRows = 0;
-
-        foreach ($comments as $comment) {
-            if ($this->mark($comment, 'waiting')) {
-                $updateRows++;
-            }
-        }
-
-        /** 设置提示信息 */
-        Notice::alloc()
-            ->set(
-                $updateRows > 0 ? _t('评论已经被标记为待审核') : _t('没有评论被标记为待审核'),
-                $updateRows > 0 ? 'success' : 'notice'
-            );
-
-        /** 返回原网页 */
-        $this->response->goBack();
-    }
-
     /**
      * 标记评论状态
      *
+     * @access private
      * @param integer $coid 评论主键
      * @param string $status 状态
      * @return boolean
-     * @throws Exception
      */
     private function mark($coid, $status)
     {
         $comment = $this->db->fetchRow($this->select()
-            ->where('coid = ?', $coid)->limit(1), [$this, 'push']);
+        ->where('coid = ?', $coid)->limit(1), array($this, 'push'));
 
         if ($comment && $this->commentIsWriteable()) {
             /** 增加评论编辑插件接口 */
-            self::pluginHandle()->mark($comment, $this, $status);
+            $this->pluginHandle()->mark($comment, $this, $status);
 
             /** 不必更新的情况 */
             if ($status == $comment['status']) {
@@ -71,16 +43,15 @@ class Edit extends Comments implements ActionInterface
 
             /** 更新评论 */
             $this->db->query($this->db->update('table.comments')
-                ->rows(['status' => $status])->where('coid = ?', $coid));
+            ->rows(array('status' => $status))->where('coid = ?', $coid));
 
             /** 更新相关内容的评论数 */
             if ('approved' == $comment['status'] && 'approved' != $status) {
                 $this->db->query($this->db->update('table.contents')
-                    ->expression('commentsNum', 'commentsNum - 1')
-                    ->where('cid = ? AND commentsNum > 0', $comment['cid']));
-            } elseif ('approved' != $comment['status'] && 'approved' == $status) {
+                ->expression('commentsNum', 'commentsNum - 1')->where('cid = ? AND commentsNum > 0', $comment['cid']));
+            } else if ('approved' != $comment['status'] && 'approved' == $status) {
                 $this->db->query($this->db->update('table.contents')
-                    ->expression('commentsNum', 'commentsNum + 1')->where('cid = ?', $comment['cid']));
+                ->expression('commentsNum', 'commentsNum + 1')->where('cid = ?', $comment['cid']));
             }
 
             return true;
@@ -90,9 +61,35 @@ class Edit extends Comments implements ActionInterface
     }
 
     /**
+     * 标记为待审核
+     *
+     * @access public
+     * @return void
+     */
+    public function waitingComment()
+    {
+        $comments = $this->request->filter('int')->getArray('coid');
+        $updateRows = 0;
+
+        foreach ($comments as $comment) {
+            if ($this->mark($comment, 'waiting')) {
+                $updateRows ++;
+            }
+        }
+
+        /** 设置提示信息 */
+        $this->widget('Widget_Notice')->set($updateRows > 0 ? _t('评论已经被标记为待审核') : _t('没有评论被标记为待审核'),
+        $updateRows > 0 ? 'success' : 'notice');
+
+        /** 返回原网页 */
+        $this->response->goBack();
+    }
+
+    /**
      * 标记为垃圾
      *
-     * @throws Exception
+     * @access public
+     * @return void
      */
     public function spamComment()
     {
@@ -101,16 +98,13 @@ class Edit extends Comments implements ActionInterface
 
         foreach ($comments as $comment) {
             if ($this->mark($comment, 'spam')) {
-                $updateRows++;
+                $updateRows ++;
             }
         }
 
         /** 设置提示信息 */
-        Notice::alloc()
-            ->set(
-                $updateRows > 0 ? _t('评论已经被标记为垃圾') : _t('没有评论被标记为垃圾'),
-                $updateRows > 0 ? 'success' : 'notice'
-            );
+        $this->widget('Widget_Notice')->set($updateRows > 0 ? _t('评论已经被标记为垃圾') : _t('没有评论被标记为垃圾'),
+        $updateRows > 0 ? 'success' : 'notice');
 
         /** 返回原网页 */
         $this->response->goBack();
@@ -119,7 +113,8 @@ class Edit extends Comments implements ActionInterface
     /**
      * 标记为展现
      *
-     * @throws Exception
+     * @access public
+     * @return void
      */
     public function approvedComment()
     {
@@ -128,16 +123,13 @@ class Edit extends Comments implements ActionInterface
 
         foreach ($comments as $comment) {
             if ($this->mark($comment, 'approved')) {
-                $updateRows++;
+                $updateRows ++;
             }
         }
 
         /** 设置提示信息 */
-        Notice::alloc()
-            ->set(
-                $updateRows > 0 ? _t('评论已经被通过') : _t('没有评论被通过'),
-                $updateRows > 0 ? 'success' : 'notice'
-            );
+        $this->widget('Widget_Notice')->set($updateRows > 0 ? _t('评论已经被通过') : _t('没有评论被通过'),
+        $updateRows > 0 ? 'success' : 'notice');
 
         /** 返回原网页 */
         $this->response->goBack();
@@ -146,7 +138,8 @@ class Edit extends Comments implements ActionInterface
     /**
      * 删除评论
      *
-     * @throws Exception
+     * @access public
+     * @return void
      */
     public function deleteComment()
     {
@@ -155,10 +148,10 @@ class Edit extends Comments implements ActionInterface
 
         foreach ($comments as $coid) {
             $comment = $this->db->fetchRow($this->select()
-                ->where('coid = ?', $coid)->limit(1), [$this, 'push']);
+            ->where('coid = ?', $coid)->limit(1), array($this, 'push'));
 
             if ($comment && $this->commentIsWriteable()) {
-                self::pluginHandle()->delete($comment, $this);
+                $this->pluginHandle()->delete($comment, $this);
 
                 /** 删除评论 */
                 $this->db->query($this->db->delete('table.comments')->where('coid = ?', $coid));
@@ -166,34 +159,33 @@ class Edit extends Comments implements ActionInterface
                 /** 更新相关内容的评论数 */
                 if ('approved' == $comment['status']) {
                     $this->db->query($this->db->update('table.contents')
-                        ->expression('commentsNum', 'commentsNum - 1')->where('cid = ?', $comment['cid']));
+                    ->expression('commentsNum', 'commentsNum - 1')->where('cid = ?', $comment['cid']));
                 }
+                
+                $this->pluginHandle()->finishDelete($comment, $this);
 
-                self::pluginHandle()->finishDelete($comment, $this);
-
-                $deleteRows++;
+                $deleteRows ++;
             }
         }
-
+        
         if ($this->request->isAjax()) {
+            
             if ($deleteRows > 0) {
-                $this->response->throwJson([
-                    'success' => 1,
-                    'message' => _t('删除评论成功')
-                ]);
+                $this->response->throwJson(array(
+                    'success'   => 1,
+                    'message'   => _t('删除评论成功')
+                ));
             } else {
-                $this->response->throwJson([
-                    'success' => 0,
-                    'message' => _t('删除评论失败')
-                ]);
+                $this->response->throwJson(array(
+                    'success'   => 0,
+                    'message'   => _t('删除评论失败')
+                ));
             }
+            
         } else {
             /** 设置提示信息 */
-            Notice::alloc()
-                ->set(
-                    $deleteRows > 0 ? _t('评论已经被删除') : _t('没有评论被删除'),
-                    $deleteRows > 0 ? 'success' : 'notice'
-                );
+            $this->widget('Widget_Notice')->set($deleteRows > 0 ? _t('评论已经被删除') : _t('没有评论被删除'),
+            $deleteRows > 0 ? 'success' : 'notice');
 
             /** 返回原网页 */
             $this->response->goBack();
@@ -203,7 +195,8 @@ class Edit extends Comments implements ActionInterface
     /**
      * 删除所有垃圾评论
      *
-     * @throws Exception
+     * @access public
+     * @return string
      */
     public function deleteSpamComment()
     {
@@ -219,10 +212,9 @@ class Edit extends Comments implements ActionInterface
         $deleteRows = $this->db->query($deleteQuery);
 
         /** 设置提示信息 */
-        Notice::alloc()->set(
-            $deleteRows > 0 ? _t('所有垃圾评论已经被删除') : _t('没有垃圾评论被删除'),
-            $deleteRows > 0 ? 'success' : 'notice'
-        );
+        $this->widget('Widget_Notice')->set($deleteRows > 0 ?
+        _t('所有垃圾评论已经被删除') : _t('没有垃圾评论被删除'),
+        $deleteRows > 0 ? 'success' : 'notice');
 
         /** 返回原网页 */
         $this->response->goBack();
@@ -231,125 +223,129 @@ class Edit extends Comments implements ActionInterface
     /**
      * 获取可编辑的评论
      *
-     * @throws Exception
+     * @access public
+     * @return void
      */
     public function getComment()
     {
         $coid = $this->request->filter('int')->coid;
         $comment = $this->db->fetchRow($this->select()
-            ->where('coid = ?', $coid)->limit(1), [$this, 'push']);
+            ->where('coid = ?', $coid)->limit(1), array($this, 'push'));
 
         if ($comment && $this->commentIsWriteable()) {
-            $this->response->throwJson([
-                'success' => 1,
-                'comment' => $comment
-            ]);
+
+            $this->response->throwJson(array(
+                'success'   => 1,
+                'comment'   => $comment
+            ));
+
         } else {
-            $this->response->throwJson([
-                'success' => 0,
-                'message' => _t('获取评论失败')
-            ]);
+
+            $this->response->throwJson(array(
+                'success'   => 0,
+                'message'   => _t('获取评论失败')
+            ));
+
         }
     }
 
     /**
      * 编辑评论
      *
-     * @return bool
-     * @throws Exception
+     * @access public
+     * @return void
      */
-    public function editComment(): bool
+    public function editComment()
     {
         $coid = $this->request->filter('int')->coid;
         $commentSelect = $this->db->fetchRow($this->select()
-            ->where('coid = ?', $coid)->limit(1), [$this, 'push']);
+            ->where('coid = ?', $coid)->limit(1), array($this, 'push'));
 
         if ($commentSelect && $this->commentIsWriteable()) {
+        
             $comment['text'] = $this->request->text;
             $comment['author'] = $this->request->filter('strip_tags', 'trim', 'xss')->author;
             $comment['mail'] = $this->request->filter('strip_tags', 'trim', 'xss')->mail;
             $comment['url'] = $this->request->filter('url')->url;
-
-            if ($this->request->is('created')) {
-                $comment['created'] = $this->request->filter('int')->created;
-            }
-
+            
             /** 评论插件接口 */
-            $comment = self::pluginHandle()->edit($comment, $this);
+            $this->pluginHandle()->edit($comment, $this);
 
             /** 更新评论 */
             $this->update($comment, $this->db->sql()->where('coid = ?', $coid));
 
             $updatedComment = $this->db->fetchRow($this->select()
-                ->where('coid = ?', $coid)->limit(1), [$this, 'push']);
+                ->where('coid = ?', $coid)->limit(1), array($this, 'push'));
             $updatedComment['content'] = $this->content;
-
+            
             /** 评论插件接口 */
-            self::pluginHandle()->finishEdit($this);
+            $this->pluginHandle()->finishEdit($this);
 
-            $this->response->throwJson([
-                'success' => 1,
-                'comment' => $updatedComment
-            ]);
+            $this->response->throwJson(array(
+                'success'   => 1,
+                'comment'   => $updatedComment
+            ));
         }
 
-        $this->response->throwJson([
-            'success' => 0,
-            'message' => _t('修评论失败')
-        ]);
+        $this->response->throwJson(array(
+            'success'   => 0,
+            'message'   => _t('修评论失败')
+        ));
     }
-
+    
     /**
      * 回复评论
      *
-     * @throws Exception
+     * @access public
+     * @return void
      */
     public function replyComment()
     {
         $coid = $this->request->filter('int')->coid;
         $commentSelect = $this->db->fetchRow($this->select()
-            ->where('coid = ?', $coid)->limit(1), [$this, 'push']);
+            ->where('coid = ?', $coid)->limit(1), array($this, 'push'));
 
         if ($commentSelect && $this->commentIsWriteable()) {
-            $comment = [
-                'cid'      => $commentSelect['cid'],
-                'created'  => $this->options->time,
-                'agent'    => $this->request->getAgent(),
-                'ip'       => $this->request->getIp(),
-                'ownerId'  => $commentSelect['ownerId'],
-                'authorId' => $this->user->uid,
-                'type'     => 'comment',
-                'author'   => $this->user->screenName,
-                'mail'     => $this->user->mail,
-                'url'      => $this->user->url,
-                'parent'   => $coid,
-                'text'     => $this->request->text,
-                'status'   => 'approved'
-            ];
-
+        
+            $comment = array(
+                'cid'       =>  $commentSelect['cid'],
+                'created'   =>  $this->options->time,
+                'agent'     =>  $this->request->getAgent(),
+                'ip'        =>  $this->request->getIp(),
+                'ownerId'   =>  $commentSelect['ownerId'],
+                'authorId'  =>  $this->user->uid,
+                'type'      =>  'comment',
+                'author'    =>  $this->user->screenName,
+                'mail'      =>  $this->user->mail,
+                'url'       =>  $this->user->url,
+                'parent'    =>  $coid,
+                'text'      =>  $this->request->text,
+                'status'    =>  'approved'
+            );
+            
             /** 评论插件接口 */
-            self::pluginHandle()->comment($comment, $this);
+            $this->pluginHandle()->comment($comment, $this);
 
             /** 回复评论 */
             $commentId = $this->insert($comment);
 
             $insertComment = $this->db->fetchRow($this->select()
-                ->where('coid = ?', $commentId)->limit(1), [$this, 'push']);
+                ->where('coid = ?', $commentId)->limit(1), array($this, 'push'));
             $insertComment['content'] = $this->content;
-
+            
             /** 评论完成接口 */
-            self::pluginHandle()->finishComment($this);
+            $this->pluginHandle()->finishComment($this);
 
-            $this->response->throwJson([
-                'success' => 1,
-                'comment' => $insertComment
-            ]);
+            $this->response->throwJson(array(
+                'success'   => 1,
+                'comment'   => $insertComment
+            ));
         }
 
-        $this->response->throwJson([
-            'success' => 0,
-            'message' => _t('回复评论失败')
-        ]);
+        $this->response->throwJson(array(
+            'success'   => 0,
+            'message'   => _t('回复评论失败')
+        ));
     }
 
     /**

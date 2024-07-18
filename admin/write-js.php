@@ -1,9 +1,9 @@
 <?php if(!defined('__TYPECHO_ADMIN__')) exit; ?>
-<?php \Typecho\Plugin::factory('admin/write-js.php')->write(); ?>
-<?php \Widget\Metas\Tag\Cloud::alloc('sort=count&desc=1&limit=200')->to($tags); ?>
+<?php Typecho_Plugin::factory('admin/write-js.php')->write(); ?>
+<?php Typecho_Widget::widget('Widget_Metas_Tag_Cloud', 'sort=count&desc=1&limit=200')->to($tags); ?>
 
-<script src="<?php $options->adminStaticUrl('js', 'timepicker.js'); ?>"></script>
-<script src="<?php $options->adminStaticUrl('js', 'tokeninput.js'); ?>"></script>
+<script src="<?php $options->adminStaticUrl('js', 'timepicker.js?v=' . $suffixVersion); ?>"></script>
+<script src="<?php $options->adminStaticUrl('js', 'tokeninput.js?v=' . $suffixVersion); ?>"></script>
 <script>
 $(document).ready(function() {
     // 日期时间控件
@@ -67,7 +67,7 @@ $(document).ready(function() {
                 'tags'  =>  $tags->name
             );
         }
-        echo json_encode($data);
+        echo Json::encode($data);
         ?>, {
             propertyToSearch:   'tags',
             tokenValue      :   'tags',
@@ -281,7 +281,7 @@ $(document).ready(function() {
 
         var frame = $('<iframe frameborder="0" class="preview-frame preview-loading"></iframe>')
             .attr('src', './preview.php?cid=' + cid)
-            .attr('sandbox', 'allow-same-origin allow-scripts')
+            .attr('sandbox', 'allow-scripts')
             .appendTo(document.body);
 
         frame.load(function () {

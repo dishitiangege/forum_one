@@ -1,13 +1,14 @@
 <?php
-
-namespace Widget\Contents\Attachment;
-
-use Typecho\Db;
-use Widget\Base\Contents;
-
-if (!defined('__TYPECHO_ROOT_DIR__')) {
-    exit;
-}
+if (!defined('__TYPECHO_ROOT_DIR__')) exit;
+/**
+ * 文章相关文件
+ *
+ * @category typecho
+ * @package Widget
+ * @copyright Copyright (c) 2008 Typecho team (http://www.typecho.org)
+ * @license GNU General Public License 2.0
+ * @version $Id$
+ */
 
 /**
  * 文章相关文件组件
@@ -17,14 +18,13 @@ if (!defined('__TYPECHO_ROOT_DIR__')) {
  * @copyright Copyright (c) 2008 Typecho team (http://www.typecho.org)
  * @license GNU General Public License 2.0
  */
-class Related extends Contents
+class Widget_Contents_Attachment_Related extends Widget_Abstract_Contents
 {
     /**
      * 执行函数
      *
      * @access public
      * @return void
-     * @throws Db\Exception
      */
     public function execute()
     {
@@ -42,7 +42,7 @@ class Related extends Contents
         $select->where('table.contents.parent = ?', $this->parameter->parentId);
 
         /** 提交查询 */
-        $select->order('table.contents.created', Db::SORT_ASC);
+        $select->order('table.contents.created', Typecho_Db::SORT_ASC);
 
         if ($this->parameter->limit > 0) {
             $select->limit($this->parameter->limit);
@@ -52,6 +52,6 @@ class Related extends Contents
             $select->offset($this->parameter->offset);
         }
 
-        $this->db->fetchAll($select, [$this, 'push']);
+        $this->db->fetchAll($select, array($this, 'push'));
     }
 }

@@ -3,11 +3,11 @@
 <?php
 if (isset($post) || isset($page)) {
     $cid = isset($post) ? $post->cid : $page->cid;
-
+    
     if ($cid) {
-        \Widget\Contents\Attachment\Related::alloc(['parentId' => $cid])->to($attachment);
+        Typecho_Widget::widget('Widget_Contents_Attachment_Related', 'parentId=' . $cid)->to($attachment);
     } else {
-        \Widget\Contents\Attachment\Unattached::alloc()->to($attachment);
+        Typecho_Widget::widget('Widget_Contents_Attachment_Unattached')->to($attachment);
     }
 }
 ?>

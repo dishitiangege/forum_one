@@ -1,13 +1,5 @@
 <?php
-
-namespace Typecho\Plugin;
-
-if (!defined('__TYPECHO_ROOT_DIR__')) {
-    exit;
-}
-
-use Typecho\Exception as TypechoException;
-
+if (!defined('__TYPECHO_ROOT_DIR__')) exit;
 /**
  * Typecho Blog Platform
  *
@@ -21,6 +13,5 @@ use Typecho\Exception as TypechoException;
  *
  * @package Plugin
  */
-class Exception extends TypechoException
-{
-}
+class Typecho_Plugin_Exception extends Typecho_Exception
+{}

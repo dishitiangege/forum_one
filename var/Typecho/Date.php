@@ -1,7 +1,5 @@
 <?php
 
-namespace Typecho;
-
 /**
  * 日期处理
  *
@@ -9,7 +7,7 @@ namespace Typecho;
  * @category typecho
  * @package Date
  */
-class Date
+class Typecho_Date
 {
     /**
      * 期望时区偏移
@@ -44,41 +42,24 @@ class Date
     public $timeStamp = 0;
 
     /**
-     * @var string
-     */
-    public $year;
-
-    /**
-     * @var string
-     */
-    public $month;
-
-    /**
-     * @var string
-     */
-    public $day;
-
-    /**
      * 初始化参数
      *
-     * @param integer|null $time 时间戳
+     * @access public
+     * @param integer $time 时间戳
      */
-    public function __construct(?int $time = null)
+    public function __construct($time = NULL)
     {
-        $this->timeStamp = (null === $time ? self::time() : $time)
-            + (self::$timezoneOffset - self::$serverTimezoneOffset);
-
-        $this->year = date('Y', $this->timeStamp);
-        $this->month = date('m', $this->timeStamp);
-        $this->day = date('d', $this->timeStamp);
+        $this->timeStamp = (NULL === $time ? self::time() : $time) + (self::$timezoneOffset - self::$serverTimezoneOffset);
     }
 
     /**
      * 设置当前期望的时区偏移
      *
+     * @access public
      * @param integer $offset
+     * @return void
      */
-    public static function setTimezoneOffset(int $offset)
+    public static function setTimezoneOffset($offset)
     {
         self::$timezoneOffset = $offset;
         self::$serverTimezoneOffset = idate('Z');
@@ -87,10 +68,11 @@ class Date
     /**
      * 获取格式化时间
      *
+     * @access public
      * @param string $format 时间格式
      * @return string
      */
-    public function format(string $format): string
+    public function format($format)
     {
         return date($format, $this->timeStamp);
     }
@@ -98,11 +80,33 @@ class Date
     /**
      * 获取国际化偏移时间
      *
+     * @access public
      * @return string
      */
-    public function word(): string
+    public function word()
     {
-        return I18n::dateWord($this->timeStamp, self::time() + (self::$timezoneOffset - self::$serverTimezoneOffset));
+        return Typecho_I18n::dateWord($this->timeStamp, self::time() + (self::$timezoneOffset - self::$serverTimezoneOffset));
+    }
+
+    /**
+     * 获取单项数据
+     *
+     * @access public
+     * @param string $name 名称
+     * @return integer
+     */
+    public function __get($name)
+    {
+        switch ($name) {
+            case 'year':
+                return date('Y', $this->timeStamp);
+            case 'month':
+                return date('m', $this->timeStamp);
+            case 'day':
+                return date('d', $this->timeStamp);
+            default:
+                return;
+        }
     }
 
     /**
@@ -111,7 +115,7 @@ class Date
      * @deprecated
      * @return int
      */
-    public static function gmtTime(): int
+    public static function gmtTime()
     {
         return self::time();
     }
@@ -121,8 +125,8 @@ class Date
      *
      * @return int
      */
-    public static function time(): int
+    public static function time()
     {
-        return self::$serverTimeStamp ?: (self::$serverTimeStamp = time());
+        return self::$serverTimeStamp ? self::$serverTimeStamp : (self::$serverTimeStamp = time());
     }
 }

@@ -14,13 +14,13 @@ if (!defined('__TYPECHO_ROOT_DIR__') && !@include_once 'config.inc.php') {
 }
 
 /** 初始化组件 */
-\Widget\Init::alloc();
+Typecho_Widget::widget('Widget_Init');
 
 /** 注册一个初始化插件 */
-\Typecho\Plugin::factory('index.php')->begin();
+Typecho_Plugin::factory('index.php')->begin();
 
 /** 开始路由分发 */
-\Typecho\Router::dispatch();
+Typecho_Router::dispatch();
 
 /** 注册一个结束插件 */
-\Typecho\Plugin::factory('index.php')->end();
+Typecho_Plugin::factory('index.php')->end();

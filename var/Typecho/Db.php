@@ -1,10 +1,11 @@
 <?php
-
-namespace Typecho;
-
-use Typecho\Db\Adapter;
-use Typecho\Db\Query;
-use Typecho\Db\Exception as DbException;
+/**
+ * Typecho Blog Platform
+ *
+ * @copyright  Copyright (c) 2008 Typecho team (http://www.typecho.org)
+ * @license    GNU General Public License 2.0
+ * @version    $Id: Db.php 107 2008-04-11 07:14:43Z magike.net $
+ */
 
 /**
  * 包含获取数据支持方法的类.
@@ -13,56 +14,65 @@ use Typecho\Db\Exception as DbException;
  *
  * @package Db
  */
-class Db
+class Typecho_Db
 {
     /** 读取数据库 */
-    public const READ = 1;
+    const READ = 1;
 
     /** 写入数据库 */
-    public const WRITE = 2;
+    const WRITE = 2;
 
     /** 升序方式 */
-    public const SORT_ASC = 'ASC';
+    const SORT_ASC = 'ASC';
 
     /** 降序方式 */
-    public const SORT_DESC = 'DESC';
+    const SORT_DESC = 'DESC';
 
     /** 表内连接方式 */
-    public const INNER_JOIN = 'INNER';
+    const INNER_JOIN = 'INNER';
 
     /** 表外连接方式 */
-    public const OUTER_JOIN = 'OUTER';
+    const OUTER_JOIN = 'OUTER';
 
     /** 表左连接方式 */
-    public const LEFT_JOIN = 'LEFT';
+    const LEFT_JOIN = 'LEFT';
 
     /** 表右连接方式 */
-    public const RIGHT_JOIN = 'RIGHT';
+    const RIGHT_JOIN = 'RIGHT';
 
     /** 数据库查询操作 */
-    public const SELECT = 'SELECT';
+    const SELECT = 'SELECT';
 
     /** 数据库更新操作 */
-    public const UPDATE = 'UPDATE';
+    const UPDATE = 'UPDATE';
 
     /** 数据库插入操作 */
-    public const INSERT = 'INSERT';
+    const INSERT = 'INSERT';
 
     /** 数据库删除操作 */
-    public const DELETE = 'DELETE';
+    const DELETE = 'DELETE';
 
     /**
      * 数据库适配器
-     * @var Adapter
+     * @var Typecho_Db_Adapter
      */
-    private $adapter;
+    private $_adapter;
 
     /**
      * 默认配置
      *
+     * @access private
+     * @var Typecho_Config
+     */
+    private $_config;
+
+    /**
+     * 连接池
+     *
+     * @access private
      * @var array
      */
-    private $config;
+    private $_pool;
 
     /**
      * 已经连接
@@ -70,7 +80,7 @@ class Db
      * @access private
      * @var array
      */
-    private $connectedPool;
+    private $_connectedPool;
 
     /**
      * 前缀
@@ -78,7 +88,7 @@ class Db
      * @access private
      * @var string
      */
-    private $prefix;
+    private $_prefix;
 
     /**
      * 适配器名称
@@ -86,55 +96,42 @@ class Db
      * @access private
      * @var string
      */
-    private $adapterName;
+    private $_adapterName;
 
     /**
      * 实例化的数据库对象
-     * @var Db
+     * @var Typecho_Db
      */
-    private static $instance;
+    private static $_instance;
 
     /**
      * 数据库类构造函数
      *
      * @param mixed $adapterName 适配器名称
      * @param string $prefix 前缀
-     *
-     * @throws DbException
+     * @throws Typecho_Db_Exception
      */
-    public function __construct($adapterName, string $prefix = 'typecho_')
+    public function __construct($adapterName, $prefix = 'typecho_')
     {
         /** 获取适配器名称 */
-        $adapterName = $adapterName == 'Mysql' ? 'Mysqli' : $adapterName;
-        $this->adapterName = $adapterName;
+        $this->_adapterName = $adapterName;
 
         /** 数据库适配器 */
-        $adapterName = '\Typecho\Db\Adapter\\' . str_replace('_', '\\', $adapterName);
+        $adapterName = 'Typecho_Db_Adapter_' . $adapterName;
 
-        if (!call_user_func([$adapterName, 'isAvailable'])) {
-            throw new DbException("Adapter {$adapterName} is not available");
+        if (!call_user_func(array($adapterName, 'isAvailable'))) {
+            throw new Typecho_Db_Exception("Adapter {$adapterName} is not available");
         }
 
-        $this->prefix = $prefix;
+        $this->_prefix = $prefix;
 
         /** 初始化内部变量 */
-        $this->connectedPool = [];
-
-        $this->config = [
-            self::READ => [],
-            self::WRITE => []
-        ];
+        $this->_pool = array();
+        $this->_connectedPool = array();
+        $this->_config = array();
 
         //实例化适配器对象
-        $this->adapter = new $adapterName();
-    }
-
-    /**
-     * @return Adapter
-     */
-    public function getAdapter(): Adapter
-    {
-        return $this->adapter;
+        $this->_adapter = new $adapterName();
     }
 
     /**
@@ -143,9 +140,9 @@ class Db
      * @access public
      * @return string
      */
-    public function getAdapterName(): string
+    public function getAdapterName()
     {
-        return $this->adapterName;
+        return $this->_adapterName;
     }
 
     /**
@@ -154,168 +151,156 @@ class Db
      * @access public
      * @return string
      */
-    public function getPrefix(): string
+    public function getPrefix()
     {
-        return $this->prefix;
+        return $this->_prefix;
     }
 
     /**
-     * @param Config $config
-     * @param int $op
+     * getConfig  
+     * 
+     * @access public
+     * @return array
      */
-    public function addConfig(Config $config, int $op)
+    public function getConfig()
     {
-        if ($op & self::READ) {
-            $this->config[self::READ][] = $config;
-        }
-
-        if ($op & self::WRITE) {
-            $this->config[self::WRITE][] = $config;
-        }
-    }
-
-    /**
-     * getConfig
-     *
-     * @param int $op
-     *
-     * @return Config
-     * @throws DbException
-     */
-    public function getConfig(int $op): Config
-    {
-        if (empty($this->config[$op])) {
-            /** DbException */
-            throw new DbException('Missing Database Connection');
-        }
-
-        $key = array_rand($this->config[$op]);
-        return $this->config[$op][$key];
+        return $this->_config;
     }
 
     /**
      * 重置连接池
-     *
+     * 
      * @return void
      */
     public function flushPool()
     {
-        $this->connectedPool = [];
+        $this->_connectedPool = array();
     }
 
     /**
      * 选择数据库
-     *
-     * @param int $op
-     *
-     * @return mixed
-     * @throws DbException
+     * 
+     * @param int $op 
+     * @return Typecho_Db_Adapter
+     * @throws Typecho_Db_Exception
      */
-    public function selectDb(int $op)
+    public function selectDb($op)
     {
-        if (!isset($this->connectedPool[$op])) {
-            $selectConnectionConfig = $this->getConfig($op);
-            $selectConnectionHandle = $this->adapter->connect($selectConnectionConfig);
-            $this->connectedPool[$op] = $selectConnectionHandle;
+        if (!isset($this->_connectedPool[$op])) {
+            if (empty($this->_pool[$op])) {
+                /** Typecho_Db_Exception */
+                throw new Typecho_Db_Exception('Missing Database Connection');
+            }
+            
+            //获取相应读或写服务器连接池中的一个
+            $selectConnection = rand(0, count($this->_pool[$op]) - 1); 
+            //获取随机获得的连接池配置
+            $selectConnectionConfig = $this->_config[$this->_pool[$op][$selectConnection]];
+            $selectConnectionHandle = $this->_adapter->connect($selectConnectionConfig);
+            $this->_connectedPool[$op] = &$selectConnectionHandle;
+            
         }
 
-        return $this->connectedPool[$op];
+        return $this->_connectedPool[$op];
     }
 
     /**
      * 获取SQL词法构建器实例化对象
      *
-     * @return Query
+     * @return Typecho_Db_Query
      */
-    public function sql(): Query
+    public function sql()
     {
-        return new Query($this->adapter, $this->prefix);
+        return new Typecho_Db_Query($this->_adapter, $this->_prefix);
     }
 
     /**
      * 为多数据库提供支持
      *
      * @access public
-     * @param array $config 数据库实例
+     * @param Typecho_Db $db 数据库实例
      * @param integer $op 数据库操作
      * @return void
      */
-    public function addServer(array $config, int $op)
+    public function addServer($config, $op)
     {
-        $this->addConfig(Config::factory($config), $op);
-        $this->flushPool();
+        $this->_config[] = Typecho_Config::factory($config);
+        $key = count($this->_config) - 1;
+
+        /** 将连接放入池中 */
+        switch ($op) {
+            case self::READ:
+            case self::WRITE:
+                $this->_pool[$op][] = $key;
+                break;
+            default:
+                $this->_pool[self::READ][] = $key;
+                $this->_pool[self::WRITE][] = $key;
+                break;
+        }
     }
 
     /**
      * 获取版本
-     *
-     * @param int $op
-     *
+     * 
+     * @param int $op 
      * @return string
-     * @throws DbException
      */
-    public function getVersion(int $op = self::READ): string
+    public function getVersion($op = self::READ)
     {
-        return $this->adapter->getVersion($this->selectDb($op));
+        return $this->_adapter->getVersion($this->selectDb($op));
     }
 
     /**
      * 设置默认数据库对象
      *
      * @access public
-     * @param Db $db 数据库对象
+     * @param Typecho_Db $db 数据库对象
      * @return void
      */
-    public static function set(Db $db)
+    public static function set(Typecho_Db $db)
     {
-        self::$instance = $db;
+        self::$_instance = $db;
     }
 
     /**
      * 获取数据库实例化对象
      * 用静态变量存储实例化的数据库对象,可以保证数据连接仅进行一次
      *
-     * @return Db
-     * @throws DbException
+     * @return Typecho_Db
+     * @throws Typecho_Db_Exception
      */
-    public static function get(): Db
+    public static function get()
     {
-        if (empty(self::$instance)) {
-            /** DbException */
-            throw new DbException('Missing Database Object');
+        if (empty(self::$_instance)) {
+            /** Typecho_Db_Exception */
+            throw new Typecho_Db_Exception('Missing Database Object');
         }
 
-        return self::$instance;
+        return self::$_instance;
     }
 
     /**
      * 选择查询字段
      *
-     * @param ...$ags
-     *
-     * @return Query
-     * @throws DbException
+     * @access public
+     * @param mixed $field 查询字段
+     * @return Typecho_Db_Query
      */
-    public function select(...$ags): Query
+    public function select()
     {
-        $this->selectDb(self::READ);
-
         $args = func_get_args();
-        return call_user_func_array([$this->sql(), 'select'], $args ?: ['*']);
+        return call_user_func_array(array($this->sql(), 'select'), $args ? $args : array('*'));
     }
 
     /**
      * 更新记录操作(UPDATE)
      *
      * @param string $table 需要更新记录的表
-     *
-     * @return Query
-     * @throws DbException
+     * @return Typecho_Db_Query
      */
-    public function update(string $table): Query
+    public function update($table)
     {
-        $this->selectDb(self::WRITE);
-
         return $this->sql()->update($table);
     }
 
@@ -323,14 +308,10 @@ class Db
      * 删除记录操作(DELETE)
      *
      * @param string $table 需要删除记录的表
-     *
-     * @return Query
-     * @throws DbException
+     * @return Typecho_Db_Query
      */
-    public function delete(string $table): Query
+    public function delete($table)
     {
-        $this->selectDb(self::WRITE);
-
         return $this->sql()->delete($table);
     }
 
@@ -338,25 +319,21 @@ class Db
      * 插入记录操作(INSERT)
      *
      * @param string $table 需要插入记录的表
-     *
-     * @return Query
-     * @throws DbException
+     * @return Typecho_Db_Query
      */
-    public function insert(string $table): Query
+    public function insert($table)
     {
-        $this->selectDb(self::WRITE);
-
         return $this->sql()->insert($table);
     }
 
     /**
      * @param $table
-     * @throws DbException
+     * @throws Typecho_Db_Exception
      */
     public function truncate($table)
     {
-        $table = preg_replace("/^table\./", $this->prefix, $table);
-        $this->adapter->truncate($table, $this->selectDb(self::WRITE));
+        $table = preg_replace("/^table\./", $this->_prefix, $table);
+        $this->_adapter->truncate($table, $this->selectDb(self::WRITE));
     }
 
     /**
@@ -365,21 +342,20 @@ class Db
      * @param mixed $query 查询语句或者查询对象
      * @param int $op 数据库读写状态
      * @param string $action 操作动作
-     *
      * @return mixed
-     * @throws DbException
+     * @throws Typecho_Db_Exception
      */
-    public function query($query, int $op = self::READ, string $action = self::SELECT)
+    public function query($query, $op = self::READ, $action = self::SELECT)
     {
-        $table = null;
+        $table = NULL;
 
         /** 在适配器中执行查询 */
-        if ($query instanceof Query) {
+        if ($query instanceof Typecho_Db_Query) {
             $action = $query->getAttribute('action');
             $table = $query->getAttribute('table');
             $op = (self::UPDATE == $action || self::DELETE == $action
-                || self::INSERT == $action) ? self::WRITE : self::READ;
-        } elseif (!is_string($query)) {
+            || self::INSERT == $action) ? self::WRITE : self::READ;
+        } else if (!is_string($query)) {
             /** 如果query不是对象也不是字符串,那么将其判断为查询资源句柄,直接返回 */
             return $query;
         }
@@ -388,7 +364,7 @@ class Db
         $handle = $this->selectDb($op);
 
         /** 提交查询 */
-        $resource = $this->adapter->query($query instanceof Query ?
+        $resource = $this->_adapter->query($query instanceof Typecho_Db_Query ?
             $query->prepare($query) : $query, $handle, $op, $action, $table);
 
         if ($action) {
@@ -396,9 +372,9 @@ class Db
             switch ($action) {
                 case self::UPDATE:
                 case self::DELETE:
-                    return $this->adapter->affectedRows($resource, $handle);
+                    return $this->_adapter->affectedRows($resource, $handle);
                 case self::INSERT:
-                    return $this->adapter->lastInsertId($resource, $handle);
+                    return $this->_adapter->lastInsertId($resource, $handle);
                 case self::SELECT:
                 default:
                     return $resource;
@@ -413,51 +389,68 @@ class Db
      * 一次取出所有行
      *
      * @param mixed $query 查询对象
-     * @param callable|null $filter 行过滤器函数,将查询的每一行作为第一个参数传入指定的过滤器中
-     *
+     * @param array $filter 行过滤器函数,将查询的每一行作为第一个参数传入指定的过滤器中
      * @return array
-     * @throws DbException
      */
-    public function fetchAll($query, ?callable $filter = null): array
+    public function fetchAll($query, array $filter = NULL)
     {
         //执行查询
-        $resource = $this->query($query);
-        $result = $this->adapter->fetchAll($resource);
+        $resource = $this->query($query, self::READ);
+        $result = array();
 
-        return $filter ? array_map($filter, $result) : $result;
+        /** 取出过滤器 */
+        if (!empty($filter)) {
+            list($object, $method) = $filter;
+        }
+
+        //取出每一行
+        while ($rows = $this->_adapter->fetch($resource)) {
+            //判断是否有过滤器
+            $result[] = $filter ? call_user_func(array(&$object, $method), $rows) : $rows;
+        }
+
+        return $result;
     }
 
     /**
      * 一次取出一行
      *
      * @param mixed $query 查询对象
-     * @param callable|null $filter 行过滤器函数,将查询的每一行作为第一个参数传入指定的过滤器中
-     * @return array|null
-     * @throws DbException
+     * @param array $filter 行过滤器函数,将查询的每一行作为第一个参数传入指定的过滤器中
+     * @return mixed
      */
-    public function fetchRow($query, ?callable $filter = null): ?array
+    public function fetchRow($query, array $filter = NULL)
     {
-        $resource = $this->query($query);
+        $resource = $this->query($query, self::READ);
 
-        return ($rows = $this->adapter->fetch($resource)) ?
-            ($filter ? call_user_func($filter, $rows) : $rows) :
-            null;
+        /** 取出过滤器 */
+        if ($filter) {
+            list($object, $method) = $filter;
+        }
+
+        return ($rows = $this->_adapter->fetch($resource)) ?
+        ($filter ? $object->$method($rows) : $rows) :
+        array();
     }
 
     /**
      * 一次取出一个对象
      *
      * @param mixed $query 查询对象
-     * @param array|null $filter 行过滤器函数,将查询的每一行作为第一个参数传入指定的过滤器中
-     * @return object|null
-     * @throws DbException
+     * @param array $filter 行过滤器函数,将查询的每一行作为第一个参数传入指定的过滤器中
+     * @return mixed
      */
-    public function fetchObject($query, ?array $filter = null): ?object
+    public function fetchObject($query, array $filter = NULL)
     {
-        $resource = $this->query($query);
+        $resource = $this->query($query, self::READ);
 
-        return ($rows = $this->adapter->fetchObject($resource)) ?
-            ($filter ? call_user_func($filter, $rows) : $rows) :
-            null;
+        /** 取出过滤器 */
+        if ($filter) {
+            list($object, $method) = $filter;
+        }
+
+        return ($rows = $this->_adapter->fetchObject($resource)) ?
+        ($filter ? $object->$method($rows) : $rows) :
+        new stdClass();
     }
 }

@@ -1,227 +1,137 @@
 <?php
-
-namespace IXR;
-
-use Typecho\Widget\Exception as WidgetException;
+/*
+   IXR - The Inutio XML-RPC Library - (c) Incutio Ltd 2002
+   Version 1.61 - Simon Willison, 11th July 2003 (htmlentities -> htmlspecialchars)
+   Site:   http://scripts.incutio.com/xmlrpc/
+   Manual: http://scripts.incutio.com/xmlrpc/manual.php
+   Made available under the Artistic License: http://www.opensource.org/licenses/artistic-license.php
+*/
 
 /**
  * IXR服务器
  *
  * @package IXR
  */
-class Server
+class IXR_Server
 {
+    /**
+     * 输入参数
+     *
+     * @access private
+     * @var array
+     */
+    private $data;
+
     /**
      * 回调函数
      *
+     * @access private
      * @var array
      */
-    private $callbacks;
+    private $callbacks = array();
+
+    /**
+     * 消息体
+     *
+     * @access private
+     * @var IXR_Message
+     */
+    private $message;
 
     /**
      * 默认参数
      *
+     * @access private
      * @var array
      */
     private $capabilities;
 
     /**
-     * @var Hook
-     */
-    private $hook;
-
-    /**
      * 构造函数
      *
-     * @param array $callbacks 回调函数
+     * @access public
+     * @param mixed $callbacks 回调函数
+     * @param mixed $data 输入参数
+     * @return void
      */
-    public function __construct(array $callbacks = [])
+    public function __construct($callbacks = false, $data = false)
     {
         $this->setCapabilities();
-        $this->callbacks = $callbacks;
+        if ($callbacks) {
+            $this->callbacks = $callbacks;
+        }
         $this->setCallbacks();
-    }
-
-    /**
-     * 获取默认参数
-     *
-     * @access public
-     * @return array
-     */
-    public function getCapabilities(): array
-    {
-        return $this->capabilities;
-    }
-
-    /**
-     * 列出所有方法
-     *
-     * @access public
-     * @return array
-     */
-    public function listMethods(): array
-    {
-        // Returns a list of methods - uses array_reverse to ensure user defined
-        // methods are listed before server defined methods
-        return array_reverse(array_keys($this->callbacks));
-    }
-
-    /**
-     * 一次处理多个请求
-     *
-     * @param array $methodcalls
-     * @return array
-     */
-    public function multiCall(array $methodcalls): array
-    {
-        // See http://www.xmlrpc.com/discuss/msgReader$1208
-        $return = [];
-        foreach ($methodcalls as $call) {
-            $method = $call['methodName'];
-            $params = $call['params'];
-            if ($method == 'system.multicall') {
-                $result = new Error(-32600, 'Recursive calls to system.multicall are forbidden');
-            } else {
-                $result = $this->call($method, $params);
-            }
-            if (is_a($result, 'Error')) {
-                $return[] = [
-                    'faultCode'   => $result->code,
-                    'faultString' => $result->message
-                ];
-            } else {
-                $return[] = [$result];
-            }
-        }
-        return $return;
-    }
-
-    /**
-     * @param string $methodName
-     * @return string|Error
-     */
-    public function methodHelp(string $methodName)
-    {
-        if (!$this->hasMethod($methodName)) {
-            return new Error(-32601, 'server error. requested method ' . $methodName . ' does not exist.');
-        }
-
-        [$object, $method] = $this->callbacks[$methodName];
-
-        try {
-            $ref = new \ReflectionMethod($object, $method);
-            $doc = $ref->getDocComment();
-
-            return $doc ?: '';
-        } catch (\ReflectionException $e) {
-            return '';
-        }
-    }
-
-    /**
-     * @param Hook $hook
-     */
-    public function setHook(Hook $hook)
-    {
-        $this->hook = $hook;
+        $this->serve($data);
     }
 
     /**
      * 呼叫内部方法
      *
-     * @param string $methodName 方法名
-     * @param array $args 参数
+     * @access private
+     * @param string $methodname 方法名
+     * @param mixed $args 参数
      * @return mixed
      */
-    private function call(string $methodName, array $args)
+    private function call($methodname, $args)
     {
-        if (!$this->hasMethod($methodName)) {
-            return new Error(-32601, 'server error. requested method ' . $methodName . ' does not exist.');
+        // hook
+        if (0 !== strpos($methodname, 'hook.') && $this->hasMethod('hook.beforeCall')) {
+            $this->call('hook.beforeCall', array($methodname));
         }
-        $method = $this->callbacks[$methodName];
-
-        if (!is_callable($method)) {
-            return new Error(
-                -32601,
-                'server error. requested class method "' . $methodName . '" does not exist.'
-            );
+        
+        if (!$this->hasMethod($methodname)) {
+            return new IXR_Error(-32601, 'server error. requested method '.$methodname.' does not exist.');
         }
+        $method = $this->callbacks[$methodname];
 
-        [$object, $objectMethod] = $method;
-
-        try {
-            $ref = new \ReflectionMethod($object, $objectMethod);
-            $requiredArgs = $ref->getNumberOfRequiredParameters();
-            if (count($args) < $requiredArgs) {
-                return new Error(
-                    -32602,
-                    'server error. requested class method "' . $methodName . '" require ' . $requiredArgs . ' params.'
-                );
+        // Are we dealing with a function or a method?
+        if (is_string($method) && substr($method, 0, 5) == 'this:') {
+            // It's a class method - check it exists
+            $method = substr($method, 5);
+            if (!method_exists($this, $method)) {
+                return new IXR_Error(-32601, 'server error. requested class method "'.$method.'" does not exist.');
             }
-
-            foreach ($ref->getParameters() as $key => $parameter) {
-                if ($parameter->hasType() && !settype($args[$key], $parameter->getType()->getName())) {
-                    return new Error(
-                        -32602,
-                        'server error. requested class method "'
-                        . $methodName . '" ' . $key . ' param has wrong type.'
-                    );
+            // Call the method
+            $result = $this->$method($args);
+        } else {
+            if (is_array($method)) {
+                list($object, $func) = $method;
+                if (!is_callable($method)) {
+                    return new IXR_Error(-32601, 'server error. requested class method "'.$object . '.' . $func.'" does not exist.');
                 }
+                
+                $result = call_user_func_array(array($object, $func), $args);
+            } elseif (!function_exists($method)) {
+                // It's a function - does it exist?
+                return new IXR_Error(-32601, 'server error. requested function "'.$method.'" does not exist.');
+            } else {
+                // Call the function
+                $result = $method($args);
             }
-
-            if (isset($this->hook)) {
-                $result = $this->hook->beforeRpcCall($methodName, $ref, $args);
-
-                if (isset($result)) {
-                    return $result;
-                }
-            }
-
-            $result = call_user_func_array($method, $args);
-
-            if (isset($this->hook)) {
-                $this->hook->afterRpcCall($methodName, $result);
-            }
-
-            return $result;
-        } catch (\ReflectionException $e) {
-            return new Error(
-                -32601,
-                'server error. requested class method "' . $methodName . '" does not exist.'
-            );
-        } catch (Exception $e) {
-            return new Error(
-                $e->getCode(),
-                $e->getMessage()
-            );
-        } catch (WidgetException $e) {
-            return new Error(
-                -32001,
-                $e->getMessage()
-            );
-        } catch (\Exception $e) {
-            return new Error(
-                -32001,
-                'server error. requested class method "' . $methodName . '" failed.'
-            );
         }
+        
+        // hook
+        if (0 !== strpos($methodname, 'hook.') && $this->hasMethod('hook.afterCall')) {
+            $this->call('hook.afterCall', array($methodname));
+        }
+        
+        return $result;
     }
 
     /**
      * 抛出错误
      *
      * @access private
-     * @param integer|Error $error 错误代码
-     * @param string|null $message 错误消息
+     * @param integer $error 错误代码
+     * @param string $message 错误消息
      * @return void
      */
-    private function error($error, ?string $message = null)
+    private function error($error, $message = false)
     {
         // Accepts either an error object or an error code and message
-        if (!$error instanceof Error) {
-            $error = new Error($error, $message);
+        if ($message && !is_object($error)) {
+            $error = new IXR_Error($error, $message);
         }
-
         $this->output($error->getXml());
     }
 
@@ -230,15 +140,16 @@ class Server
      *
      * @access private
      * @param string $xml 输出xml
+     * @return 输出xml
      */
-    private function output(string $xml)
+    private function output($xml)
     {
-        $xml = '<?xml version="1.0"?>' . "\n" . $xml;
+        $xml = '<?xml version="1.0"?>'."\n".$xml;
         $length = strlen($xml);
         header('Connection: close');
-        header('Content-Length: ' . $length);
+        header('Content-Length: '.$length);
         header('Content-Type: text/xml');
-        header('Date: ' . date('r'));
+        header('Date: '.date('r'));
         echo $xml;
         exit;
     }
@@ -250,7 +161,7 @@ class Server
      * @param string $method 方法名
      * @return mixed
      */
-    private function hasMethod(string $method)
+    private function hasMethod($method)
     {
         return in_array($method, array_keys($this->callbacks));
     }
@@ -264,20 +175,20 @@ class Server
     private function setCapabilities()
     {
         // Initialises capabilities array
-        $this->capabilities = [
-            'xmlrpc'           => [
-                'specUrl'     => 'http://www.xmlrpc.com/spec',
+        $this->capabilities = array(
+            'xmlrpc' => array(
+                'specUrl' => 'http://www.xmlrpc.com/spec',
                 'specVersion' => 1
-            ],
-            'faults_interop'   => [
-                'specUrl'     => 'http://xmlrpc-epi.sourceforge.net/specs/rfc.fault_codes.php',
+            ),
+            'faults_interop' => array(
+                'specUrl' => 'http://xmlrpc-epi.sourceforge.net/specs/rfc.fault_codes.php',
                 'specVersion' => 20010516
-            ],
-            'system.multicall' => [
-                'specUrl'     => 'http://www.xmlrpc.com/discuss/msgReader$1208',
+            ),
+            'system.multicall' => array(
+                'specUrl' => 'http://www.xmlrpc.com/discuss/msgReader$1208',
                 'specVersion' => 1
-            ],
-        ];
+            ),
+        );
     }
 
     /**
@@ -288,50 +199,130 @@ class Server
      */
     private function setCallbacks()
     {
-        $this->callbacks['system.getCapabilities'] = [$this, 'getCapabilities'];
-        $this->callbacks['system.listMethods'] = [$this, 'listMethods'];
-        $this->callbacks['system.multicall'] = [$this, 'multiCall'];
-        $this->callbacks['system.methodHelp'] = [$this, 'methodHelp'];
+        $this->callbacks['system.getCapabilities'] = 'this:getCapabilities';
+        $this->callbacks['system.listMethods'] = 'this:listMethods';
+        $this->callbacks['system.multicall'] = 'this:multiCall';
     }
 
     /**
      * 服务入口
+     *
+     * @access private
+     * @param mixed $data 输入参数
+     * @return void
      */
-    public function serve()
+    private function serve($data = false)
     {
-        $message = new Message(file_get_contents('php://input') ?: '');
+        if (!isset($GLOBALS['HTTP_RAW_POST_DATA'])) {
+            $GLOBALS['HTTP_RAW_POST_DATA'] = file_get_contents("php://input");
+        }
+        if (isset($GLOBALS['HTTP_RAW_POST_DATA'])) {
+            $GLOBALS['HTTP_RAW_POST_DATA'] = trim($GLOBALS['HTTP_RAW_POST_DATA']);
+        }
 
-        if (!$message->parse()) {
+        if (!$data) {
+            global $HTTP_RAW_POST_DATA;
+            if (!$HTTP_RAW_POST_DATA) {
+               die('XML-RPC server accepts POST requests only.');
+            }
+            $data = $HTTP_RAW_POST_DATA;
+        }
+        $this->message = new IXR_Message($data);
+        if (!$this->message->parse()) {
             $this->error(-32700, 'parse error. not well formed');
-        } elseif ($message->messageType != 'methodCall') {
+        }
+        if ($this->message->messageType != 'methodCall') {
             $this->error(-32600, 'server error. invalid xml-rpc. not conforming to spec. Request must be a methodCall');
         }
-
-        $result = $this->call($message->methodName, $message->params);
+        
+        if (0 === strpos($this->message->methodName, 'hook.')) {
+            die('THIS METHOD MUST BE CALLED INSIDE.');
+        }
+        
+        $result = $this->call($this->message->methodName, $this->message->params);
         // Is the result an error?
-        if ($result instanceof Error) {
+        if (is_a($result, 'IXR_Error')) {
             $this->error($result);
         }
-
         // Encode the result
-        $r = new Value($result);
-        $resultXml = $r->getXml();
-
+        $r = new IXR_Value($result);
+        $resultxml = $r->getXml();
         // Create the XML
         $xml = <<<EOD
 <methodResponse>
   <params>
     <param>
       <value>
-        $resultXml
+        $resultxml
       </value>
     </param>
   </params>
 </methodResponse>
 
 EOD;
-
+        // hook
+        if ($this->hasMethod('hook.beforeOutput')) {
+            $this->call('hook.beforeOutput', array());
+        }
+        
         // Send it
         $this->output($xml);
+    }
+
+    /**
+     * 获取默认参数
+     *
+     * @access public
+     * @param mixed $args 输入参数
+     * @return array
+     */
+    public function getCapabilities($args)
+    {
+        return $this->capabilities;
+    }
+
+    /**
+     * 列出所有方法
+     *
+     * @access public
+     * @param mixed $args 输入参数
+     * @return mixed
+     */
+    public function listMethods($args)
+    {
+        // Returns a list of methods - uses array_reverse to ensure user defined
+        // methods are listed before server defined methods
+        return array_reverse(array_keys($this->callbacks));
+    }
+
+    /**
+     * 一次处理多个请求
+     *
+     * @access public
+     * @param void $methodcalls
+     * @return array
+     */
+    public function multiCall($methodcalls)
+    {
+        // See http://www.xmlrpc.com/discuss/msgReader$1208
+        $return = array();
+        foreach ($methodcalls as $call) {
+            $method = $call['methodName'];
+            $params = $call['params'];
+            if ($method == 'system.multicall') {
+                $result = new IXR_Error(-32600, 'Recursive calls to system.multicall are forbidden');
+            } else {
+                $result = $this->call($method, $params);
+            }
+            if (is_a($result, 'IXR_Error')) {
+                $return[] = array(
+                    'faultCode' => $result->code,
+                    'faultString' => $result->message
+                );
+            } else {
+                $return[] = array($result);
+            }
+        }
+        return $return;
     }
 }

@@ -1,15 +1,14 @@
 <?php
-
-namespace Typecho\Widget\Helper;
-
-use Typecho\Cookie;
-use Typecho\Request;
-use Typecho\Validate;
-use Typecho\Widget\Helper\Form\Element;
-
-if (!defined('__TYPECHO_ROOT_DIR__')) {
-    exit;
-}
+if (!defined('__TYPECHO_ROOT_DIR__')) exit;
+/**
+ * 表单处理帮手
+ *
+ * @category typecho
+ * @package Widget
+ * @copyright Copyright (c) 2008 Typecho team (http://www.typecho.org)
+ * @license GNU General Public License 2.0
+ * @version $Id$
+ */
 
 /**
  * 表单处理帮手
@@ -19,22 +18,22 @@ if (!defined('__TYPECHO_ROOT_DIR__')) {
  * @copyright Copyright (c) 2008 Typecho team (http://www.typecho.org)
  * @license GNU General Public License 2.0
  */
-class Form extends Layout
+class Typecho_Widget_Helper_Form extends Typecho_Widget_Helper_Layout
 {
     /** 表单post方法 */
-    public const POST_METHOD = 'post';
+    const POST_METHOD = 'post';
 
     /** 表单get方法 */
-    public const GET_METHOD = 'get';
+    const GET_METHOD = 'get';
 
     /** 标准编码方法 */
-    public const STANDARD_ENCODE = 'application/x-www-form-urlencoded';
+    const STANDARD_ENCODE = 'application/x-www-form-urlencoded';
 
     /** 混合编码 */
-    public const MULTIPART_ENCODE = 'multipart/form-data';
+    const MULTIPART_ENCODE = 'multipart/form-data';
 
     /** 文本编码 */
-    public const TEXT_ENCODE = 'text/plain';
+    const TEXT_ENCODE= 'text/plain';
 
     /**
      * 输入元素列表
@@ -42,14 +41,14 @@ class Form extends Layout
      * @access private
      * @var array
      */
-    private $inputs = [];
+    private $_inputs = array();
 
     /**
      * 构造函数,设置基本属性
      *
      * @access public
      */
-    public function __construct($action = null, $method = self::GET_METHOD, $enctype = self::STANDARD_ENCODE)
+    public function __construct($action = NULL, $method = self::GET_METHOD, $enctype = self::STANDARD_ENCODE)
     {
         /** 设置表单标签 */
         parent::__construct('form');
@@ -64,36 +63,13 @@ class Form extends Layout
     }
 
     /**
-     * 设置表单提交目的
-     *
-     * @param string|null $action 表单提交目的
-     * @return $this
-     */
-    public function setAction(?string $action): Form
-    {
-        $this->setAttribute('action', $action);
-        return $this;
-    }
-
-    /**
-     * 设置表单提交方法
-     *
-     * @param string $method 表单提交方法
-     * @return $this
-     */
-    public function setMethod(string $method): Form
-    {
-        $this->setAttribute('method', $method);
-        return $this;
-    }
-
-    /**
      * 设置表单编码方案
      *
+     * @access public
      * @param string $enctype 编码方法
-     * @return $this
+     * @return Typecho_Widget_Helper_Form
      */
-    public function setEncodeType(string $enctype): Form
+    public function setEncodeType($enctype)
     {
         $this->setAttribute('enctype', $enctype);
         return $this;
@@ -103,12 +79,12 @@ class Form extends Layout
      * 增加输入元素
      *
      * @access public
-     * @param Element $input 输入元素
-     * @return $this
+     * @param Typecho_Widget_Helper_Form_Element $input 输入元素
+     * @return Typecho_Widget_Helper_Form
      */
-    public function addInput(Element $input): Form
+    public function addInput(Typecho_Widget_Helper_Form_Element $input)
     {
-        $this->inputs[$input->name] = $input;
+        $this->_inputs[$input->name] = $input;
         $this->addItem($input);
         return $this;
     }
@@ -116,34 +92,69 @@ class Form extends Layout
     /**
      * 获取输入项
      *
+     * @access public
      * @param string $name 输入项名称
      * @return mixed
      */
-    public function getInput(string $name)
+    public function getInput($name)
     {
-        return $this->inputs[$name];
+        return $this->_inputs[$name];
     }
 
     /**
      * 获取所有输入项的提交值
      *
+     * @access public
      * @return array
      */
-    public function getAllRequest(): array
+    public function getAllRequest()
     {
-        return $this->getParams(array_keys($this->inputs));
+        $result = array();
+        $source = (self::POST_METHOD == $this->getAttribute('method')) ? $_POST : $_GET;
+
+        foreach ($this->_inputs as $name => $input) {
+            $result[$name] = isset($source[$name]) ? $source[$name] : NULL;
+        }
+        return $result;
+    }
+
+    /**
+     * 设置表单提交方法
+     *
+     * @access public
+     * @param string $method 表单提交方法
+     * @return Typecho_Widget_Helper_Form
+     */
+    public function setMethod($method)
+    {
+        $this->setAttribute('method', $method);
+        return $this;
+    }
+
+    /**
+     * 设置表单提交目的
+     *
+     * @access public
+     * @param string $action 表单提交目的
+     * @return Typecho_Widget_Helper_Form
+     */
+    public function setAction($action)
+    {
+        $this->setAttribute('action', $action);
+        return $this;
     }
 
     /**
      * 获取此表单的所有输入项固有值
      *
+     * @access public
      * @return array
      */
-    public function getValues(): array
+    public function getValues()
     {
-        $values = [];
+        $values = array();
 
-        foreach ($this->inputs as $name => $input) {
+        foreach ($this->_inputs as $name => $input) {
             $values[$name] = $input->value;
         }
         return $values;
@@ -152,28 +163,49 @@ class Form extends Layout
     /**
      * 获取此表单的所有输入项
      *
+     * @access public
      * @return array
      */
-    public function getInputs(): array
+    public function getInputs()
     {
-        return $this->inputs;
+        return $this->_inputs;
+    }
+
+    /**
+     * 获取提交数据源
+     *
+     * @access public
+     * @param array $params 数据参数集
+     * @return array
+     */
+    public function getParams(array $params)
+    {
+        $result = array();
+        $source = (self::POST_METHOD == $this->getAttribute('method')) ? $_POST : $_GET;
+
+        foreach ($params as $param) {
+            $result[$param] = isset($source[$param]) ? $source[$param] : NULL;
+        }
+
+        return $result;
     }
 
     /**
      * 验证表单
      *
-     * @return array
+     * @access public
+     * @return mixed
      */
-    public function validate(): array
+    public function validate()
     {
-        $validator = new Validate();
-        $rules = [];
+        $validator = new Typecho_Validate();
+        $rules = array();
 
-        foreach ($this->inputs as $name => $input) {
+        foreach ($this->_inputs as $name => $input) {
             $rules[$name] = $input->rules;
         }
 
-        $id = md5(implode('"', array_keys($this->inputs)));
+        $id = md5(implode('"', array_keys($this->_inputs)));
 
         /** 表单值 */
         $formData = $this->getParams(array_keys($rules));
@@ -181,50 +213,33 @@ class Form extends Layout
 
         if ($error) {
             /** 利用session记录错误 */
-            Cookie::set('__typecho_form_message_' . $id, json_encode($error));
+            Typecho_Cookie::set('__typecho_form_message_' . $id, Json::encode($error));
 
             /** 利用session记录表单值 */
-            Cookie::set('__typecho_form_record_' . $id, json_encode($formData));
+            Typecho_Cookie::set('__typecho_form_record_' . $id, Json::encode($formData));
         }
 
         return $error;
     }
 
     /**
-     * 获取提交数据源
-     *
-     * @param array $params 数据参数集
-     * @return array
-     */
-    public function getParams(array $params): array
-    {
-        $result = [];
-        $request = Request::getInstance();
-
-        foreach ($params as $param) {
-            $result[$param] = $request->get($param, is_array($this->getInput($param)->value) ? [] : null);
-        }
-
-        return $result;
-    }
-
-    /**
      * 显示表单
      *
+     * @access public
      * @return void
      */
     public function render()
     {
-        $id = md5(implode('"', array_keys($this->inputs)));
-        $record = Cookie::get('__typecho_form_record_' . $id);
-        $message = Cookie::get('__typecho_form_message_' . $id);
+        $id = md5(implode('"', array_keys($this->_inputs)));
+        $record = Typecho_Cookie::get('__typecho_form_record_' . $id);
+        $message = Typecho_Cookie::get('__typecho_form_message_' . $id);
 
         /** 恢复表单值 */
         if (!empty($record)) {
-            $record = json_decode($record, true);
-            $message = json_decode($message, true);
-            foreach ($this->inputs as $name => $input) {
-                $input->value($record[$name] ?? $input->value);
+            $record = Json::decode($record, true);
+            $message = Json::decode($message, true);
+            foreach ($this->_inputs as $name => $input) {
+                $input->value(isset($record[$name]) ? $record[$name] : $input->value);
 
                 /** 显示错误消息 */
                 if (isset($message[$name])) {
@@ -232,10 +247,10 @@ class Form extends Layout
                 }
             }
 
-            Cookie::delete('__typecho_form_record_' . $id);
+            Typecho_Cookie::delete('__typecho_form_record_' . $id);
         }
 
         parent::render();
-        Cookie::delete('__typecho_form_message_' . $id);
+        Typecho_Cookie::delete('__typecho_form_message_' . $id);
     }
 }

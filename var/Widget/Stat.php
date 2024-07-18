@@ -1,340 +1,363 @@
 <?php
-
-namespace Widget;
-
-if (!defined('__TYPECHO_ROOT_DIR__')) {
-    exit;
-}
+if (!defined('__TYPECHO_ROOT_DIR__')) exit;
+/**
+ * 全局统计
+ *
+ * @link typecho
+ * @package Widget
+ * @copyright Copyright (c) 2008 Typecho team (http://www.typecho.org)
+ * @license GNU General Public License 2.0
+ * @version $Id$
+ */
 
 /**
  * 全局统计组件
  *
- * @property-read int $publishedPostsNum
- * @property-read int $waitingPostsNum
- * @property-read int $draftPostsNum
- * @property-read int $myPublishedPostsNum
- * @property-read int $myWaitingPostsNum
- * @property-read int $myDraftPostsNum
- * @property-read int $currentPublishedPostsNum
- * @property-read int $currentWaitingPostsNum
- * @property-read int $currentDraftPostsNum
- * @property-read int $publishedPagesNum
- * @property-read int $draftPagesNum
- * @property-read int $publishedCommentsNum
- * @property-read int $waitingCommentsNum
- * @property-read int $spamCommentsNum
- * @property-read int $myPublishedCommentsNum
- * @property-read int $myWaitingCommentsNum
- * @property-read int $mySpamCommentsNum
- * @property-read int $currentCommentsNum
- * @property-read int $currentPublishedCommentsNum
- * @property-read int $currentWaitingCommentsNum
- * @property-read int $currentSpamCommentsNum
- * @property-read int $categoriesNum
- * @property-read int $tagsNum
+ * @link typecho
+ * @package Widget
+ * @copyright Copyright (c) 2008 Typecho team (http://www.typecho.org)
+ * @license GNU General Public License 2.0
  */
-class Stat extends Base
+class Widget_Stat extends Typecho_Widget
 {
     /**
-     * @param int $components
+     * 用户对象
+     *
+     * @access protected
+     * @var Widget_User
      */
-    protected function initComponents(int &$components)
+    protected $user;
+
+    /**
+     * 数据库对象
+     *
+     * @access protected
+     * @var Typecho_Db
+     */
+    protected $db;
+
+    /**
+     * 构造函数,初始化组件
+     *
+     * @access public
+     * @param mixed $request request对象
+     * @param mixed $response response对象
+     * @param mixed $params 参数列表
+     * @return void
+     */
+    public function __construct($request, $response, $params = NULL)
     {
-        $components = self::INIT_USER;
+        parent::__construct($request, $response, $params);
+
+        /** 初始化数据库 */
+        $this->db = Typecho_Db::get();
+
+        /** 初始化常用组件 */
+        $this->user = $this->widget('Widget_User');
     }
 
     /**
      * 获取已发布的文章数目
      *
+     * @access protected
      * @return integer
      */
-    protected function ___publishedPostsNum(): int
+    protected function ___publishedPostsNum()
     {
-        return $this->db->fetchObject($this->db->select(['COUNT(cid)' => 'num'])
-            ->from('table.contents')
-            ->where('table.contents.type = ?', 'post')
-            ->where('table.contents.status = ?', 'publish'))->num;
+        return $this->db->fetchObject($this->db->select(array('COUNT(cid)' => 'num'))
+                    ->from('table.contents')
+                    ->where('table.contents.type = ?', 'post')
+                    ->where('table.contents.status = ?', 'publish'))->num;
     }
 
     /**
      * 获取待审核的文章数目
      *
+     * @access protected
      * @return integer
      */
-    protected function ___waitingPostsNum(): int
+    protected function ___waitingPostsNum()
     {
-        return $this->db->fetchObject($this->db->select(['COUNT(cid)' => 'num'])
-            ->from('table.contents')
-            ->where('table.contents.type = ? OR table.contents.type = ?', 'post', 'post_draft')
-            ->where('table.contents.status = ?', 'waiting'))->num;
+        return $this->db->fetchObject($this->db->select(array('COUNT(cid)' => 'num'))
+                    ->from('table.contents')
+                    ->where('table.contents.type = ? OR table.contents.type = ?', 'post', 'post_draft')
+                    ->where('table.contents.status = ?', 'waiting'))->num;
     }
 
     /**
      * 获取草稿文章数目
      *
+     * @access protected
      * @return integer
      */
-    protected function ___draftPostsNum(): int
+    protected function ___draftPostsNum()
     {
-        return $this->db->fetchObject($this->db->select(['COUNT(cid)' => 'num'])
-            ->from('table.contents')
-            ->where('table.contents.type = ?', 'post_draft'))->num;
+        return $this->db->fetchObject($this->db->select(array('COUNT(cid)' => 'num'))
+                    ->from('table.contents')
+                    ->where('table.contents.type = ?', 'post_draft'))->num;
     }
 
     /**
      * 获取当前用户已发布的文章数目
      *
+     * @access protected
      * @return integer
      */
-    protected function ___myPublishedPostsNum(): int
+    protected function ___myPublishedPostsNum()
     {
-        return $this->db->fetchObject($this->db->select(['COUNT(cid)' => 'num'])
-            ->from('table.contents')
-            ->where('table.contents.type = ?', 'post')
-            ->where('table.contents.status = ?', 'publish')
-            ->where('table.contents.authorId = ?', $this->user->uid))->num;
+        return $this->db->fetchObject($this->db->select(array('COUNT(cid)' => 'num'))
+                    ->from('table.contents')
+                    ->where('table.contents.type = ?', 'post')
+                    ->where('table.contents.status = ?', 'publish')
+                    ->where('table.contents.authorId = ?', $this->user->uid))->num;
     }
 
     /**
      * 获取当前用户待审核文章数目
      *
+     * @access protected
      * @return integer
      */
-    protected function ___myWaitingPostsNum(): int
+    protected function ___myWaitingPostsNum()
     {
-        return $this->db->fetchObject($this->db->select(['COUNT(cid)' => 'num'])
-            ->from('table.contents')
-            ->where('table.contents.type = ? OR table.contents.type = ?', 'post', 'post_draft')
-            ->where('table.contents.status = ?', 'waiting')
-            ->where('table.contents.authorId = ?', $this->user->uid))->num;
+        return $this->db->fetchObject($this->db->select(array('COUNT(cid)' => 'num'))
+                    ->from('table.contents')
+                    ->where('table.contents.type = ? OR table.contents.type = ?', 'post', 'post_draft')
+                    ->where('table.contents.status = ?', 'waiting')
+                    ->where('table.contents.authorId = ?', $this->user->uid))->num;
     }
 
     /**
      * 获取当前用户草稿文章数目
      *
+     * @access protected
      * @return integer
      */
-    protected function ___myDraftPostsNum(): int
+    protected function ___myDraftPostsNum()
     {
-        return $this->db->fetchObject($this->db->select(['COUNT(cid)' => 'num'])
-            ->from('table.contents')
-            ->where('table.contents.type = ?', 'post_draft')
-            ->where('table.contents.authorId = ?', $this->user->uid))->num;
+        return $this->db->fetchObject($this->db->select(array('COUNT(cid)' => 'num'))
+                    ->from('table.contents')
+                    ->where('table.contents.type = ?', 'post_draft')
+                    ->where('table.contents.authorId = ?', $this->user->uid))->num;
     }
 
     /**
      * 获取当前用户已发布的文章数目
      *
+     * @access protected
      * @return integer
      */
-    protected function ___currentPublishedPostsNum(): int
+    protected function ___currentPublishedPostsNum()
     {
-        return $this->db->fetchObject($this->db->select(['COUNT(cid)' => 'num'])
-            ->from('table.contents')
-            ->where('table.contents.type = ?', 'post')
-            ->where('table.contents.status = ?', 'publish')
-            ->where('table.contents.authorId = ?', $this->request->filter('int')->uid))->num;
+        return $this->db->fetchObject($this->db->select(array('COUNT(cid)' => 'num'))
+                    ->from('table.contents')
+                    ->where('table.contents.type = ?', 'post')
+                    ->where('table.contents.status = ?', 'publish')
+                    ->where('table.contents.authorId = ?', $this->request->filter('int')->uid))->num;
     }
 
     /**
      * 获取当前用户待审核文章数目
      *
+     * @access protected
      * @return integer
      */
-    protected function ___currentWaitingPostsNum(): int
+    protected function ___currentWaitingPostsNum()
     {
-        return $this->db->fetchObject($this->db->select(['COUNT(cid)' => 'num'])
-            ->from('table.contents')
-            ->where('table.contents.type = ? OR table.contents.type = ?', 'post', 'post_draft')
-            ->where('table.contents.status = ?', 'waiting')
-            ->where('table.contents.authorId = ?', $this->request->filter('int')->uid))->num;
+        return $this->db->fetchObject($this->db->select(array('COUNT(cid)' => 'num'))
+                    ->from('table.contents')
+                    ->where('table.contents.type = ? OR table.contents.type = ?', 'post', 'post_draft')
+                    ->where('table.contents.status = ?', 'waiting')
+                    ->where('table.contents.authorId = ?', $this->request->filter('int')->uid))->num;
     }
 
     /**
      * 获取当前用户草稿文章数目
      *
+     * @access protected
      * @return integer
      */
-    protected function ___currentDraftPostsNum(): int
+    protected function ___currentDraftPostsNum()
     {
-        return $this->db->fetchObject($this->db->select(['COUNT(cid)' => 'num'])
-            ->from('table.contents')
-            ->where('table.contents.type = ?', 'post_draft')
-            ->where('table.contents.authorId = ?', $this->request->filter('int')->uid))->num;
+        return $this->db->fetchObject($this->db->select(array('COUNT(cid)' => 'num'))
+                    ->from('table.contents')
+                    ->where('table.contents.type = ?', 'post_draft')
+                    ->where('table.contents.authorId = ?', $this->request->filter('int')->uid))->num;
     }
 
     /**
      * 获取已发布页面数目
      *
+     * @access protected
      * @return integer
      */
-    protected function ___publishedPagesNum(): int
+    protected function ___publishedPagesNum()
     {
-        return $this->db->fetchObject($this->db->select(['COUNT(cid)' => 'num'])
-            ->from('table.contents')
-            ->where('table.contents.type = ?', 'page')
-            ->where('table.contents.status = ?', 'publish'))->num;
+        return $this->db->fetchObject($this->db->select(array('COUNT(cid)' => 'num'))
+                    ->from('table.contents')
+                    ->where('table.contents.type = ?', 'page')
+                    ->where('table.contents.status = ?', 'publish'))->num;
     }
 
     /**
      * 获取草稿页面数目
      *
+     * @access protected
      * @return integer
      */
-    protected function ___draftPagesNum(): int
+    protected function ___draftPagesNum()
     {
-        return $this->db->fetchObject($this->db->select(['COUNT(cid)' => 'num'])
-            ->from('table.contents')
-            ->where('table.contents.type = ?', 'page_draft'))->num;
+        return $this->db->fetchObject($this->db->select(array('COUNT(cid)' => 'num'))
+                    ->from('table.contents')
+                    ->where('table.contents.type = ?', 'page_draft'))->num;
     }
 
     /**
      * 获取当前显示的评论数目
      *
+     * @access protected
      * @return integer
      */
-    protected function ___publishedCommentsNum(): int
+    protected function ___publishedCommentsNum()
     {
-        return $this->db->fetchObject($this->db->select(['COUNT(coid)' => 'num'])
-            ->from('table.comments')
-            ->where('table.comments.status = ?', 'approved'))->num;
+        return $this->db->fetchObject($this->db->select(array('COUNT(coid)' => 'num'))
+                    ->from('table.comments')
+                    ->where('table.comments.status = ?', 'approved'))->num;
     }
 
     /**
      * 获取当前待审核的评论数目
      *
+     * @access protected
      * @return integer
      */
-    protected function ___waitingCommentsNum(): int
+    protected function ___waitingCommentsNum()
     {
-        return $this->db->fetchObject($this->db->select(['COUNT(coid)' => 'num'])
-            ->from('table.comments')
-            ->where('table.comments.status = ?', 'waiting'))->num;
+        return $this->db->fetchObject($this->db->select(array('COUNT(coid)' => 'num'))
+                    ->from('table.comments')
+                    ->where('table.comments.status = ?', 'waiting'))->num;
     }
 
     /**
      * 获取当前垃圾评论数目
      *
+     * @access protected
      * @return integer
      */
-    protected function ___spamCommentsNum(): int
+    protected function ___spamCommentsNum()
     {
-        return $this->db->fetchObject($this->db->select(['COUNT(coid)' => 'num'])
-            ->from('table.comments')
-            ->where('table.comments.status = ?', 'spam'))->num;
+        return $this->db->fetchObject($this->db->select(array('COUNT(coid)' => 'num'))
+                    ->from('table.comments')
+                    ->where('table.comments.status = ?', 'spam'))->num;
     }
 
     /**
      * 获取当前用户显示的评论数目
      *
+     * @access protected
      * @return integer
      */
-    protected function ___myPublishedCommentsNum(): int
+    protected function ___myPublishedCommentsNum()
     {
-        return $this->db->fetchObject($this->db->select(['COUNT(coid)' => 'num'])
-            ->from('table.comments')
-            ->where('table.comments.status = ?', 'approved')
-            ->where('table.comments.ownerId = ?', $this->user->uid))->num;
+        return $this->db->fetchObject($this->db->select(array('COUNT(coid)' => 'num'))
+                    ->from('table.comments')
+                    ->where('table.comments.status = ?', 'approved')
+                    ->where('table.comments.ownerId = ?', $this->user->uid))->num;
     }
 
     /**
-     * 获取当前用户待审核的评论数目
+     * 获取当前用户显示的评论数目
      *
+     * @access protected
      * @return integer
      */
-    protected function ___myWaitingCommentsNum(): int
+    protected function ___myWaitingCommentsNum()
     {
-        return $this->db->fetchObject($this->db->select(['COUNT(coid)' => 'num'])
-            ->from('table.comments')
-            ->where('table.comments.status = ?', 'waiting')
-            ->where('table.comments.ownerId = ?', $this->user->uid))->num;
+        return $this->db->fetchObject($this->db->select(array('COUNT(coid)' => 'num'))
+                    ->from('table.comments')
+                    ->where('table.comments.status = ?', 'waiting')
+                    ->where('table.comments.ownerId = ?', $this->user->uid))->num;
     }
 
     /**
-     * 获取当前用户垃圾评论数目
+     * 获取当前用户显示的评论数目
      *
+     * @access protected
      * @return integer
      */
-    protected function ___mySpamCommentsNum(): int
+    protected function ___mySpamCommentsNum()
     {
-        return $this->db->fetchObject($this->db->select(['COUNT(coid)' => 'num'])
-            ->from('table.comments')
-            ->where('table.comments.status = ?', 'spam')
-            ->where('table.comments.ownerId = ?', $this->user->uid))->num;
+        return $this->db->fetchObject($this->db->select(array('COUNT(coid)' => 'num'))
+                    ->from('table.comments')
+                    ->where('table.comments.status = ?', 'spam')
+                    ->where('table.comments.ownerId = ?', $this->user->uid))->num;
     }
-
+    
     /**
      * 获取当前文章的评论数目
      *
+     * @access protected
      * @return integer
      */
-    protected function ___currentCommentsNum(): int
+    protected function ___currentCommentsNum()
     {
-        return $this->db->fetchObject($this->db->select(['COUNT(coid)' => 'num'])
-            ->from('table.comments')
-            ->where('table.comments.cid = ?', $this->request->filter('int')->cid))->num;
+        return $this->db->fetchObject($this->db->select(array('COUNT(coid)' => 'num'))
+                    ->from('table.comments')
+                    ->where('table.comments.cid = ?', $this->request->filter('int')->cid))->num;
     }
 
     /**
      * 获取当前文章显示的评论数目
      *
+     * @access protected
      * @return integer
      */
-    protected function ___currentPublishedCommentsNum(): int
+    protected function ___currentPublishedCommentsNum()
     {
-        return $this->db->fetchObject($this->db->select(['COUNT(coid)' => 'num'])
-            ->from('table.comments')
-            ->where('table.comments.status = ?', 'approved')
-            ->where('table.comments.cid = ?', $this->request->filter('int')->cid))->num;
+        return $this->db->fetchObject($this->db->select(array('COUNT(coid)' => 'num'))
+                    ->from('table.comments')
+                    ->where('table.comments.status = ?', 'approved')
+                    ->where('table.comments.cid = ?', $this->request->filter('int')->cid))->num;
     }
 
     /**
-     * 获取当前文章待审核的评论数目
+     * 获取当前文章显示的评论数目
      *
+     * @access protected
      * @return integer
      */
-    protected function ___currentWaitingCommentsNum(): int
+    protected function ___currentWaitingCommentsNum()
     {
-        return $this->db->fetchObject($this->db->select(['COUNT(coid)' => 'num'])
-            ->from('table.comments')
-            ->where('table.comments.status = ?', 'waiting')
-            ->where('table.comments.cid = ?', $this->request->filter('int')->cid))->num;
+        return $this->db->fetchObject($this->db->select(array('COUNT(coid)' => 'num'))
+                    ->from('table.comments')
+                    ->where('table.comments.status = ?', 'waiting')
+                    ->where('table.comments.cid = ?', $this->request->filter('int')->cid))->num;
     }
 
     /**
-     * 获取当前文章垃圾评论数目
+     * 获取当前文章显示的评论数目
      *
+     * @access protected
      * @return integer
      */
-    protected function ___currentSpamCommentsNum(): int
+    protected function ___currentSpamCommentsNum()
     {
-        return $this->db->fetchObject($this->db->select(['COUNT(coid)' => 'num'])
-            ->from('table.comments')
-            ->where('table.comments.status = ?', 'spam')
-            ->where('table.comments.cid = ?', $this->request->filter('int')->cid))->num;
+        return $this->db->fetchObject($this->db->select(array('COUNT(coid)' => 'num'))
+                    ->from('table.comments')
+                    ->where('table.comments.status = ?', 'spam')
+                    ->where('table.comments.cid = ?', $this->request->filter('int')->cid))->num;
     }
 
     /**
      * 获取分类数目
      *
+     * @access protected
      * @return integer
      */
-    protected function ___categoriesNum(): int
+    protected function ___categoriesNum()
     {
-        return $this->db->fetchObject($this->db->select(['COUNT(mid)' => 'num'])
-            ->from('table.metas')
-            ->where('table.metas.type = ?', 'category'))->num;
-    }
-
-    /**
-     * 获取标签数目
-     *
-     * @return integer
-     */
-    protected function ___tagsNum(): int
-    {
-        return $this->db->fetchObject($this->db->select(['COUNT(mid)' => 'num'])
-            ->from('table.metas')
-            ->where('table.metas.type = ?', 'tag'))->num;
+        return $this->db->fetchObject($this->db->select(array('COUNT(mid)' => 'num'))
+                    ->from('table.metas')
+                    ->where('table.metas.type = ?', 'category'))->num;
     }
 }

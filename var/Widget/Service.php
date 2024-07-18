@@ -1,17 +1,14 @@
 <?php
-
-namespace Widget;
-
-use Typecho\Common;
-use Typecho\Http\Client;
-use Typecho\Response;
-use Typecho\Widget\Exception;
-use Widget\Base\Contents;
-use Widget\Base\Options as BaseOptions;
-
-if (!defined('__TYPECHO_ROOT_DIR__')) {
-    exit;
-}
+if (!defined('__TYPECHO_ROOT_DIR__')) exit;
+/**
+ * 通用异步服务
+ *
+ * @category typecho
+ * @package Widget
+ * @copyright Copyright (c) 2008 Typecho team (http://www.typecho.org)
+ * @license GNU General Public License 2.0
+ * @version $Id$
+ */
 
 /**
  * 通用异步服务组件
@@ -20,33 +17,56 @@ if (!defined('__TYPECHO_ROOT_DIR__')) {
  * @category typecho
  * @package Widget
  */
-class Service extends BaseOptions implements ActionInterface
+class Widget_Service extends Widget_Abstract_Options implements Widget_Interface_Do
 {
     /**
      * 异步请求
      *
      * @var array
      */
-    public $asyncRequests = [];
+    public $asyncRequests = array();
+
+    /**
+     * 获取真实的 URL
+     *
+     * @return string
+     */
+    private function getServiceUrl()
+    {
+        $url = Typecho_Common::url('/action/service', $this->options->index);
+
+        if (defined('__TYPECHO_SERVICE_URL__')) {
+            $rootPath = rtrim(parse_url($this->options->rootUrl, PHP_URL_PATH), '/');
+            $path = parse_url($url, PHP_URL_PATH);
+            $parts = parse_url(__TYPECHO_SERVICE_URL__);
+
+            if (!empty($parts['path'])
+                && $parts['path'] != '/'
+                && rtrim($parts['path'], '/') != $rootPath) {
+                $path = Typecho_Common::url($path, $parts['path']);
+            }
+
+            $parts['path'] = $path;
+            $url = Typecho_Common::buildUrl($parts);
+        }
+
+        return $url;
+    }
 
     /**
      * 发送pingback实现
      *
-     * @throws Exception|Client\Exception
+     * @access public
+     * @return void
+     * @throws Typecho_Widget_Exception
      */
     public function sendPingHandle()
     {
         /** 验证权限 */
-        $data = $this->request->get('@json');
-        $token = $data['token'] ?? '';
-        $permalink = $data['permalink'];
-        $title = $data['title'];
-        $excerpt = $data['excerpt'];
+        $token = $this->request->token;
 
-        $response = ['trackback' => [], 'pingback' => []];
-
-        if (!Common::timeTokenValidate($token, $this->options->secret, 3) || empty($permalink)) {
-            throw new Exception(_t('禁止访问'), 403);
+        if (!Typecho_Common::timeTokenValidate($token, $this->options->secret, 3)) {
+            throw new Typecho_Widget_Exception(_t('禁止访问'), 403);
         }
 
         /** 忽略超时 */
@@ -58,53 +78,49 @@ class Service extends BaseOptions implements ActionInterface
             set_time_limit(30);
         }
 
-        if (!empty($data['pingback'])) {
-            $links = $data['pingback'];
-            $permalinkPart = parse_url($permalink);
+        /** 获取post */
+        $post = $this->widget('Widget_Archive', "type=post", "cid={$this->request->cid}");
+
+        if ($post->have() && preg_match_all("|<a[^>]*href=[\"'](.*?)[\"'][^>]*>(.*?)</a>|", $post->text, $matches)) {
+            $links = array_unique($matches[1]);
+            $permalinkPart = parse_url($post->permalink);
 
             /** 发送pingback */
             foreach ($links as $url) {
                 $urlPart = parse_url($url);
 
                 if (isset($urlPart['scheme'])) {
-                    if ('http' != $urlPart['scheme'] && 'https' != $urlPart['scheme']) {
+                    if ('http' != $urlPart['scheme'] || 'https' != $urlPart['scheme']) {
                         continue;
                     }
                 } else {
                     $urlPart['scheme'] = 'http';
-                    $url = Common::buildUrl($urlPart);
+                    $url = Typecho_Common::buildUrl($urlPart);
                 }
 
                 if ($permalinkPart['host'] == $urlPart['host'] && $permalinkPart['path'] == $urlPart['path']) {
                     continue;
                 }
 
-                $spider = Client::get();
+                $spider = Typecho_Http_Client::get();
 
                 if ($spider) {
                     $spider->setTimeout(10)
-                        ->send($url);
+                    ->send($url);
 
                     if (!($xmlrpcUrl = $spider->getResponseHeader('x-pingback'))) {
-                        if (
-                            preg_match(
-                                "/<link[^>]*rel=[\"']pingback[\"'][^>]*href=[\"']([^\"']+)[\"'][^>]*>/i",
-                                $spider->getResponseBody(),
-                                $out
-                            )
-                        ) {
+                        if (preg_match("/<link[^>]*rel=[\"']pingback[\"'][^>]*href=[\"']([^\"']+)[\"'][^>]*>/i",
+                        $spider->getResponseBody(), $out)) {
                             $xmlrpcUrl = $out[1];
                         }
                     }
 
                     if (!empty($xmlrpcUrl)) {
-                        $response['pingback'][] = $url;
-
                         try {
-                            $xmlrpc = new \IXR\Client($xmlrpcUrl);
-                            $xmlrpc->pingback->ping($permalink, $url);
+                            $xmlrpc = new IXR_Client($xmlrpcUrl);
+                            $xmlrpc->pingback->ping($post->permalink, $url);
                             unset($xmlrpc);
-                        } catch (\IXR\Exception $e) {
+                        } catch (Exception $e) {
                             continue;
                         }
                     }
@@ -115,64 +131,55 @@ class Service extends BaseOptions implements ActionInterface
         }
 
         /** 发送trackback */
-        if (!empty($data['trackback'])) {
-            $links = $data['trackback'];
-
+        if ($post->have() && !empty($this->request->trackback)) {
+            $links = $this->request->trackback;
             foreach ($links as $url) {
-                $client = Client::get();
-                $response['trackback'][] = $url;
+
+                $client = Typecho_Http_Client::get();
 
                 if ($client) {
                     try {
                         $client->setTimeout(5)
-                            ->setData([
-                                'blog_name' => $this->options->title . ' &raquo ' . $title,
-                                'url' => $permalink,
-                                'excerpt' => $excerpt
-                            ])
-                            ->send($url);
+                        ->setData(array(
+                            'blog_name' => $this->options->title . ' &raquo ' . $post->title,
+                            'url'       => $post->permalink,
+                            'excerpt'   => $post->excerpt
+                        ))
+                        ->send($url);
 
                         unset($client);
-                    } catch (Client\Exception $e) {
+                    } catch (Typecho_Http_Client_Exception $e) {
                         continue;
                     }
                 }
+
             }
         }
-
-        $this->response->throwJson($response);
     }
 
     /**
      * 发送pingback
      * <code>
-     * $this->sendPing($post);
+     * $this->sendPingbacks(365);
      * </code>
      *
-     * @param Contents $content 内容url
-     * @param array|null $trackback
+     * @access public
+     * @param integer $cid 内容id
+     * @param array $trackback trackback的url
+     * @return void
      */
-    public function sendPing(Contents $content, ?array $trackback = null)
+    public function sendPing($cid, array $trackback = NULL)
     {
         $this->user->pass('contributor');
 
-        if ($client = Client::get()) {
+        if ($client = Typecho_Http_Client::get()) {
             try {
-                $input = [
+
+                $input = array(
                     'do' => 'ping',
-                    'permalink' => $content->permalink,
-                    'excerpt' => $content->excerpt,
-                    'title' => $content->title,
-                    'token' => Common::timeToken($this->options->secret)
-                ];
-
-                if (preg_match_all("|<a[^>]*href=[\"'](.*?)[\"'][^>]*>(.*?)</a>|", $content->content, $matches)) {
-                    $pingback = array_unique($matches[1]);
-
-                    if (!empty($pingback)) {
-                        $input['pingback'] = $pingback;
-                    }
-                }
+                    'cid' => $cid,
+                    'token' => Typecho_Common::timeToken($this->options->secret)
+                );
 
                 if (!empty($trackback)) {
                     $input['trackback'] = $trackback;
@@ -180,42 +187,14 @@ class Service extends BaseOptions implements ActionInterface
 
                 $client->setHeader('User-Agent', $this->options->generator)
                     ->setTimeout(2)
-                    ->setJson($input)
-                    ->send($this->getServiceUrl('ping'));
-            } catch (Client\Exception $e) {
+                    ->setData($input)
+                    ->setMethod(Typecho_Http_Client::METHOD_POST)
+                    ->send($this->getServiceUrl());
+
+            } catch (Typecho_Http_Client_Exception $e) {
                 return;
             }
         }
-    }
-
-    /**
-     * 获取真实的 URL
-     *
-     * @param string $do 动作名
-     * @return string
-     */
-    private function getServiceUrl(string $do): string
-    {
-        $url = Common::url('/action/service', $this->options->index);
-
-        if (defined('__TYPECHO_SERVICE_URL__')) {
-            $rootPath = rtrim(parse_url($this->options->rootUrl, PHP_URL_PATH), '/');
-            $path = parse_url($url, PHP_URL_PATH);
-            $parts = parse_url(__TYPECHO_SERVICE_URL__);
-
-            if (
-                !empty($parts['path'])
-                && $parts['path'] != '/'
-                && rtrim($parts['path'], '/') != $rootPath
-            ) {
-                $path = Common::url($path, $parts['path']);
-            }
-
-            $parts['path'] = $path;
-            $url = Common::buildUrl($parts);
-        }
-
-        return $url . '?do=' . $do;
     }
 
     /**
@@ -224,22 +203,27 @@ class Service extends BaseOptions implements ActionInterface
      * @param $method
      * @param mixed $params
      */
-    public function requestService($method, $params = null)
+    public function requestService($method, $params = NULL)
     {
         static $called;
 
         if (!$called) {
-            Response::getInstance()->addResponder(function () {
-                if (!empty($this->asyncRequests) && $client = Client::get()) {
+            $self = $this;
+
+            Typecho_Response::addCallback(function () use ($self) {
+                if (!empty($self->asyncRequests) && $client = Typecho_Http_Client::get()) {
                     try {
                         $client->setHeader('User-Agent', $this->options->generator)
                             ->setTimeout(2)
-                            ->setJson([
-                                'requests' => $this->asyncRequests,
-                                'token' => Common::timeToken($this->options->secret)
-                            ])
-                            ->send($this->getServiceUrl('async'));
-                    } catch (Client\Exception $e) {
+                            ->setData(array(
+                                'do'        =>  'async',
+                                'requests'  =>  Json::encode($self->asyncRequests),
+                                'token'     =>  Typecho_Common::timeToken($this->options->secret)
+                            ))
+                            ->setMethod(Typecho_Http_Client::METHOD_POST)
+                            ->send($this->getServiceUrl());
+
+                    } catch (Typecho_Http_Client_Exception $e) {
                         return;
                     }
                 }
@@ -248,22 +232,21 @@ class Service extends BaseOptions implements ActionInterface
             $called = true;
         }
 
-        $this->asyncRequests[] = [$method, $params];
+        $this->asyncRequests[] = array($method, $params);
     }
 
     /**
      * 执行回调
      *
-     * @throws Exception
+     * @throws Typecho_Widget_Exception
      */
     public function asyncHandle()
     {
         /** 验证权限 */
-        $data = $this->request->get('@json');
-        $token = $data['token'] ?? '';
+        $token = $this->request->token;
 
-        if (!Common::timeTokenValidate($token, $this->options->secret, 3)) {
-            throw new Exception(_t('禁止访问'), 403);
+        if (!Typecho_Common::timeTokenValidate($token, $this->options->secret, 3)) {
+            throw new Typecho_Widget_Exception(_t('禁止访问'), 403);
         }
 
         /** 忽略超时 */
@@ -275,12 +258,12 @@ class Service extends BaseOptions implements ActionInterface
             set_time_limit(30);
         }
 
-        $requests = $data['requests'] ?? null;
-        $plugin = self::pluginHandle();
+        $requests = Json::decode($this->request->requests, true);
+        $plugin = Typecho_Plugin::factory(__CLASS__);
 
         if (!empty($requests)) {
             foreach ($requests as $request) {
-                [$method, $params] = $request;
+                list ($method, $params) = $request;
                 $plugin->{$method}($params);
             }
         }
@@ -288,6 +271,9 @@ class Service extends BaseOptions implements ActionInterface
 
     /**
      * 异步请求入口
+     *
+     * @access public
+     * @return void
      */
     public function action()
     {

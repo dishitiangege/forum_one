@@ -1,13 +1,18 @@
 <?php
-
-namespace IXR;
+/*
+   IXR - The Inutio XML-RPC Library - (c) Incutio Ltd 2002
+   Version 1.61 - Simon Willison, 11th July 2003 (htmlentities -> htmlspecialchars)
+   Site:   http://scripts.incutio.com/xmlrpc/
+   Manual: http://scripts.incutio.com/xmlrpc/manual.php
+   Made available under the Artistic License: http://www.opensource.org/licenses/artistic-license.php
+*/
 
 /**
  * IXR错误
  *
  * @package IXR
  */
-class Error
+class IXR_Error
 {
     /**
      * 错误代码
@@ -21,17 +26,19 @@ class Error
      * 错误消息
      *
      * @access public
-     * @var string|null
+     * @var string
      */
     public $message;
 
     /**
      * 构造函数
      *
+     * @access public
      * @param integer $code 错误代码
-     * @param string|null $message 错误消息
+     * @param string $message 错误消息
+     * @return void
      */
-    public function __construct(int $code, ?string $message)
+    public function __construct($code, $message)
     {
         $this->code = $code;
         $this->message = $message;
@@ -40,11 +47,12 @@ class Error
     /**
      * 获取xml
      *
+     * @access public
      * @return string
      */
-    public function getXml(): string
+    public function getXml()
     {
-        return <<<EOD
+        $xml = <<<EOD
 <methodResponse>
   <fault>
     <value>
@@ -63,5 +71,6 @@ class Error
 </methodResponse>
 
 EOD;
+        return $xml;
     }
 }

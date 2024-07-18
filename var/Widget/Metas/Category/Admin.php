@@ -1,40 +1,36 @@
 <?php
-
-namespace Widget\Metas\Category;
-
-use Typecho\Common;
-use Typecho\Db;
-use Typecho\Widget\Exception;
-
-if (!defined('__TYPECHO_ROOT_DIR__')) {
-    exit;
-}
+if (!defined('__TYPECHO_ROOT_DIR__')) exit;
 
 /**
- * Category Admin
+ * Widget_Metas_Category_Admin  
+ * 
+ * @uses Widget_Metas_Category_List
+ * @copyright Copyright (c) 2012 Typecho Team. (http://typecho.org)
+ * @author Joyqi <magike.net@gmail.com> 
+ * @license GNU General Public License 2.0
  */
-class Admin extends Rows
+class Widget_Metas_Category_Admin extends Widget_Metas_Category_List
 {
-    /**
+   /**
      * 执行函数
      *
-     * @throws Db\Exception
+     * @access public
+     * @return void
      */
     public function execute()
     {
         $select = $this->db->select('mid')->from('table.metas')->where('type = ?', 'category');
         $select->where('parent = ?', $this->request->parent ? $this->request->parent : 0);
 
-        $this->stack = $this->getCategories(array_column(
-            $this->db->fetchAll($select->order('table.metas.order', Db::SORT_ASC)),
-            'mid'
-        ));
+        $this->stack = $this->getCategories(Typecho_Common::arrayFlatten(
+            $this->db->fetchAll($select->order('table.metas.order', Typecho_Db::SORT_ASC)), 'mid'));
     }
 
     /**
-     * 向上的返回链接
-     *
-     * @throws Db\Exception
+     * 向上的返回链接 
+     * 
+     * @access public
+     * @return void
      */
     public function backLink()
     {
@@ -47,13 +43,11 @@ class Admin extends Rows
                     ->where('type = ? AND mid = ?', 'category', $category['parent']));
 
                 if ($parent) {
-                    echo '<a href="'
-                        . Common::url('manage-categories.php?parent=' . $parent['mid'], $this->options->adminUrl)
-                        . '">';
+                    echo '<a href="' . Typecho_Common::url('manage-categories.php?parent=' . $parent['mid'], $this->options->adminUrl) . '">';
                 } else {
-                    echo '<a href="' . Common::url('manage-categories.php', $this->options->adminUrl) . '">';
+                    echo '<a href="' . Typecho_Common::url('manage-categories.php', $this->options->adminUrl) . '">';
                 }
-
+                
                 echo '&laquo; ';
                 _e('返回父级分类');
                 echo '</a>';
@@ -64,10 +58,10 @@ class Admin extends Rows
     /**
      * 获取菜单标题
      *
-     * @return string|null
-     * @throws Db\Exception|Exception
+     * @access public
+     * @return string
      */
-    public function getMenuTitle(): ?string
+    public function getMenuTitle()
     {
         if (isset($this->request->parent)) {
             $category = $this->db->fetchRow($this->select()
@@ -77,18 +71,19 @@ class Admin extends Rows
                 return _t('管理 %s 的子分类', $category['name']);
             }
         } else {
-            return null;
+            return;
         }
 
-        throw new Exception(_t('分类不存在'), 404);
+        throw new Typecho_Widget_Exception(_t('分类不存在'), 404);
     }
 
     /**
      * 获取菜单标题
      *
+     * @access public
      * @return string
      */
-    public function getAddLink(): string
+    public function getAddLink()
     {
         if (isset($this->request->parent)) {
             return 'category.php?parent=' . $this->request->filter('int')->parent;
@@ -97,3 +92,4 @@ class Admin extends Rows
         }
     }
 }
+

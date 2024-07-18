@@ -1,6 +1,13 @@
 <?php
-
-namespace Typecho;
+/**
+ * 配置管理
+ *
+ * @category typecho
+ * @package Config
+ * @copyright Copyright (c) 2008 Typecho team (http://www.typecho.org)
+ * @license GNU General Public License 2.0
+ * @version $Id$
+ */
 
 /**
  * 配置管理类
@@ -10,7 +17,7 @@ namespace Typecho;
  * @copyright Copyright (c) 2008 Typecho team (http://www.typecho.org)
  * @license GNU General Public License 2.0
  */
-class Config implements \Iterator, \ArrayAccess
+class Typecho_Config implements Iterator
 {
     /**
      * 当前配置
@@ -18,15 +25,15 @@ class Config implements \Iterator, \ArrayAccess
      * @access private
      * @var array
      */
-    private $currentConfig = [];
+    private $_currentConfig = array();
 
     /**
      * 实例化一个当前配置
      *
      * @access public
-     * @param array|string|null $config 配置列表
+     * @param mixed $config 配置列表
      */
-    public function __construct($config = [])
+    public function __construct($config = array())
     {
         /** 初始化参数 */
         $this->setDefault($config);
@@ -36,32 +43,28 @@ class Config implements \Iterator, \ArrayAccess
      * 工厂模式实例化一个当前配置
      *
      * @access public
-     *
-     * @param array|string|null $config 配置列表
-     *
-     * @return Config
+     * @param array $config 配置列表
+     * @return Typecho_Config
      */
-    public static function factory($config = []): Config
+    public static function factory($config = array())
     {
-        return new self($config);
+        return new Typecho_Config($config);
     }
 
     /**
      * 设置默认的配置
      *
      * @access public
-     *
      * @param mixed $config 配置信息
      * @param boolean $replace 是否替换已经存在的信息
-     *
      * @return void
      */
-    public function setDefault($config, bool $replace = false)
+    public function setDefault($config, $replace = false)
     {
         if (empty($config)) {
             return;
         }
-
+    
         /** 初始化参数 */
         if (is_string($config)) {
             parse_str($config, $params);
@@ -71,18 +74,10 @@ class Config implements \Iterator, \ArrayAccess
 
         /** 设置默认参数 */
         foreach ($params as $name => $value) {
-            if ($replace || !array_key_exists($name, $this->currentConfig)) {
-                $this->currentConfig[$name] = $value;
+            if ($replace || !array_key_exists($name, $this->_currentConfig)) {
+                $this->_currentConfig[$name] = $value;
             }
         }
-    }
-
-    /**
-     * @return bool
-     */
-    public function isEmpty(): bool
-    {
-        return empty($this->currentConfig);
     }
 
     /**
@@ -91,9 +86,9 @@ class Config implements \Iterator, \ArrayAccess
      * @access public
      * @return void
      */
-    public function rewind(): void
+    public function rewind()
     {
-        reset($this->currentConfig);
+        reset($this->_currentConfig);
     }
 
     /**
@@ -102,10 +97,9 @@ class Config implements \Iterator, \ArrayAccess
      * @access public
      * @return mixed
      */
-    #[\ReturnTypeWillChange]
     public function current()
     {
-        return current($this->currentConfig);
+        return current($this->_currentConfig);
     }
 
     /**
@@ -114,9 +108,9 @@ class Config implements \Iterator, \ArrayAccess
      * @access public
      * @return void
      */
-    public function next(): void
+    public function next()
     {
-        next($this->currentConfig);
+        next($this->_currentConfig);
     }
 
     /**
@@ -125,10 +119,9 @@ class Config implements \Iterator, \ArrayAccess
      * @access public
      * @return mixed
      */
-    #[\ReturnTypeWillChange]
     public function key()
     {
-        return key($this->currentConfig);
+        return key($this->_currentConfig);
     }
 
     /**
@@ -137,7 +130,7 @@ class Config implements \Iterator, \ArrayAccess
      * @access public
      * @return boolean
      */
-    public function valid(): bool
+    public function valid()
     {
         return false !== $this->current();
     }
@@ -149,9 +142,9 @@ class Config implements \Iterator, \ArrayAccess
      * @param string $name 配置名称
      * @return mixed
      */
-    public function __get(string $name)
+    public function __get($name)
     {
-        return $this->offsetGet($name);
+        return isset($this->_currentConfig[$name]) ? $this->_currentConfig[$name] : NULL;
     }
 
     /**
@@ -162,9 +155,9 @@ class Config implements \Iterator, \ArrayAccess
      * @param mixed $value 配置值
      * @return void
      */
-    public function __set(string $name, $value)
+    public function __set($name, $value)
     {
-        $this->offsetSet($name, $value);
+        $this->_currentConfig[$name] = $value;
     }
 
     /**
@@ -172,12 +165,12 @@ class Config implements \Iterator, \ArrayAccess
      *
      * @access public
      * @param string $name 配置名称
-     * @param array|null $args 参数
+     * @param array $args 参数
      * @return void
      */
-    public function __call(string $name, ?array $args)
+    public function __call($name, $args)
     {
-        echo $this->currentConfig[$name];
+        echo $this->_currentConfig[$name];
     }
 
     /**
@@ -187,9 +180,9 @@ class Config implements \Iterator, \ArrayAccess
      * @param string $name 配置名称
      * @return boolean
      */
-    public function __isSet(string $name): bool
+    public function __isSet($name)
     {
-        return $this->offsetExists($name);
+        return isset($this->_currentConfig[$name]);
     }
 
     /**
@@ -198,52 +191,8 @@ class Config implements \Iterator, \ArrayAccess
      * @access public
      * @return string
      */
-    public function __toString(): string
+    public function __toString()
     {
-        return serialize($this->currentConfig);
-    }
-
-    /**
-     * @return array
-     */
-    public function toArray(): array
-    {
-        return $this->currentConfig;
-    }
-
-    /**
-     * @param mixed $offset
-     * @return bool
-     */
-    public function offsetExists($offset): bool
-    {
-        return isset($this->currentConfig[$offset]);
-    }
-
-    /**
-     * @param mixed $offset
-     * @return mixed
-     */
-    #[\ReturnTypeWillChange]
-    public function offsetGet($offset)
-    {
-        return $this->currentConfig[$offset] ?? null;
-    }
-
-    /**
-     * @param mixed $offset
-     * @param mixed $value
-     */
-    public function offsetSet($offset, $value): void
-    {
-        $this->currentConfig[$offset] = $value;
-    }
-
-    /**
-     * @param mixed $offset
-     */
-    public function offsetUnset($offset): void
-    {
-        unset($this->currentConfig[$offset]);
+        return serialize($this->_currentConfig);
     }
 }
