@@ -42,7 +42,7 @@ $db->addServer(array (
   'password' => 'Wh20001218',
   'charset' => 'utf8mb4',
   'port' => '3306',
-  'database' => '数据库名',
+  'database' => 'm1098_oneforum',
   'engine' => 'MyISAM',
 ), Typecho_Db::READ | Typecho_Db::WRITE);
 Typecho_Db::set($db);
